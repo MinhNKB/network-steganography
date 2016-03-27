@@ -36,50 +36,85 @@ namespace ReceiverTCP
                 tcpListener.Start();
                 Console.WriteLine("Waiting for sender...");
                 tcpClient = tcpListener.AcceptTcpClient();
-                Console.WriteLine("Connected!");
-                networkStream = tcpClient.GetStream();
 
-                receivedData();
+                Console.WriteLine("Connected!");
+
+                DateTime startTime = DateTime.Now;
+
+                networkStream = tcpClient.GetStream();
+                receiveData();
                 lastReceived = DateTime.Now;
-                Console.WriteLine("Received start signal");
-                Console.Write("Received message: ");
+
                 while (true)
                 {
-                    receivedData();
+                    receiveData();
                     DateTime currentReceived = DateTime.Now;
                     if (currentReceived.Subtract(lastReceived).Milliseconds > delay)
                     {
                         receivedBits += 1;
+                        Console.Write(1);
                     }
                     else
                     {
+                        Console.Write(0);
                         receivedBits += 0;
                     }
                     lastReceived = currentReceived;
-                    if (receivedBits.Length == 8)
+                    if (receivedBits.Length == 16)
                     {
-                        if (receivedBits == "00000011")
+                        string receivedData = receivedBits.Substring(0, 8);
+                        string receivedCrc = receivedBits.Substring(8, 8);
+                        if (checkSum(receivedData, receivedCrc) == false)
                         {
-                            Console.WriteLine();
-                            break;
+                            byte[] nack = new byte[1];
+                            nack[0] = 0;
+                            networkStream.Write(nack, 0, nack.Length);
+                            Console.WriteLine("Sent NACK!");
+                            receivedBits = "";
+                            receiveData();
+                            lastReceived = DateTime.Now;
                         }
-                        string decodedString = System.Text.Encoding.UTF8.GetString(convertBytesToString(receivedBits));
-                        Console.Write(decodedString);
-                        receivedBits = "";
+                        else
+                        {
+                            byte[] ack = new byte[1];
+                            ack[0] = 1;
+                            networkStream.Write(ack, 0, ack.Length);
+                            Console.WriteLine("Sent ACK!");
 
+                            if (receivedData == "00000011")
+                            {
+                                Console.WriteLine();
+                                Console.WriteLine("Finished!");
+                                Console.WriteLine(DateTime.Now.Subtract(startTime).Seconds);
+                                break;
+                            }
+                            string decodedString = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedData));
+                            Console.Write(decodedString);
+                            receivedBits = "";
+                            receiveData();
+                            lastReceived = DateTime.Now;
+                        }
                     }
                 }
                 tcpListener.Stop();
             }
         }
 
-
-        static void receivedData()
+        static bool checkSum(string receivedData, string receivedCrc)
+        {
+            byte data = convertStringBytesToBytes(receivedData)[0];
+            byte crc = convertStringBytesToBytes(receivedCrc)[0];
+            byte check = Crc8.ComputeChecksum(data, crc);
+            if (check != 0)
+                return false;
+            return true;
+        }
+        static void receiveData()
         {
             byte[] data = new byte[1];
             networkStream.Read(data, 0, 1);
         }
-        static byte[] convertBytesToString(string input)
+        static byte[] convertStringBytesToBytes(string input)
         {
             int numOfBytes = input.Length / 8;
             byte[] bytes = new byte[numOfBytes];
@@ -88,6 +123,10 @@ namespace ReceiverTCP
                 bytes[i] = Convert.ToByte(input.Substring(8 * i, 8), 2);
             }
             return bytes;
+        }  
+        static byte[] convertStringToBytes(string input, Encoding encoding)
+        {
+            return encoding.GetBytes(input);
         }
     }
 }
