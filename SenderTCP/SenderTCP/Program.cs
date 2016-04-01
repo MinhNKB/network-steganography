@@ -14,6 +14,8 @@ namespace SenderTCP
         static NetworkStream networkStream;
         static string IP;
         static int port;
+        static int delay;
+        static int countACK, countNACK;
         static void Main(string[] args)
         {
             //byte crc = Crc8.ComputeChecksum(1, 0, 1, 0, 1, 1, 1, 1);
@@ -33,14 +35,18 @@ namespace SenderTCP
 
             while (true)
             {
-                Console.Write("Receiver IP: ");
-                IP = Console.ReadLine();
-                Console.Write("Receiver port: ");
-                port = Int32.Parse(Console.ReadLine());
+                //Console.Write("Receiver IP: ");
+                //IP = Console.ReadLine();
+                //Console.Write("Receiver port: ");
+                //port = Int32.Parse(Console.ReadLine());              
+                //Console.Write("Delay: ");
+                //int delay = int.Parse(Console.ReadLine());
 
-                int delay;
-                Console.Write("Delay: ");
-                delay = int.Parse(Console.ReadLine());
+                IP = "171.248.28.109";
+                port = 5050;
+                delay = 500;
+                countACK = 0;
+                countNACK = 0;
 
                 Console.Write("Message: ");
                 string content = Console.ReadLine();
@@ -88,15 +94,29 @@ namespace SenderTCP
                     byte[] ACK = new byte[1];
                     networkStream.Read(ACK, 0, 1);
                     if(ACK[0]==1)
-                    {
-                        Console.WriteLine("ACK");
+                    {                     
                         i += 8;
                         checkNew = true;
+                        countNACK = 0;
+                        countACK++;
+                        Console.WriteLine("ACK " + countACK);
+                        if(countACK>=5)
+                        {
+                            delay -= 50;                           
+                            Console.WriteLine("New delay: " + delay);
+                        }
                     }
                     else
-                    {
-                        Console.WriteLine("NACK");
+                    {                        
                         checkNew = false;
+                        countACK = 0;
+                        countNACK++;
+                        Console.WriteLine("NACK " + countNACK);
+                        if (countNACK >= 5)
+                        {
+                            delay *= 2;                            
+                            Console.WriteLine("New delay: " + delay);
+                        }
                     }
                 }
                 Console.WriteLine("Finished!");
@@ -105,11 +125,10 @@ namespace SenderTCP
             }
             
         }
-        static int GlobalCount = 0;
+        
         static void sendPacket()
         {
-            byte[] data = new byte[1];
-            Console.WriteLine("Global: " + GlobalCount++);
+            byte[] data = new byte[1];            
             networkStream.Write(data, 0, data.Length);
         }
 
