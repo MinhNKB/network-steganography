@@ -15,6 +15,9 @@ namespace ReceiverTCP
         static NetworkStream networkStream;
         static string ip;
         static int port;
+        static int count = 0;
+        static bool isAckConsecutive = false;
+        static bool isNackConsecutive = false;
 
         static void Main(string[] args)
         {
@@ -53,10 +56,12 @@ namespace ReceiverTCP
                     {
                         receivedBits += 1;
                         Console.Write(1);
+                        Console.Write(" " + currentReceived.Subtract(lastReceived).Milliseconds + " ");
                     }
                     else
                     {
                         Console.Write(0);
+                        Console.Write(" " + currentReceived.Subtract(lastReceived).Milliseconds + " ");
                         receivedBits += 0;
                     }
                     lastReceived = currentReceived;
@@ -69,6 +74,29 @@ namespace ReceiverTCP
                             byte[] nack = new byte[1];
                             nack[0] = 0;
                             networkStream.Write(nack, 0, nack.Length);
+                            isAckConsecutive = false;
+
+                            if (isNackConsecutive == true)
+                            {
+                                count++;
+                                if (count == 5)
+                                {
+                                    delay += 50;
+                                    count = 0;
+                                    isNackConsecutive = false;
+                                }
+                            }
+                            else
+                            {
+                                isNackConsecutive = true;
+                                count = 1;
+                            }
+
+                            Console.WriteLine();
+                            Console.WriteLine("Ack: " + isAckConsecutive);
+                            Console.WriteLine("Nack:" + isNackConsecutive);
+                            Console.WriteLine("Count: " + count);
+                            Console.WriteLine("Delay: " + delay);
                             Console.WriteLine("Sent NACK!");
                             receivedBits = "";
                             receiveData();
@@ -79,6 +107,24 @@ namespace ReceiverTCP
                             byte[] ack = new byte[1];
                             ack[0] = 1;
                             networkStream.Write(ack, 0, ack.Length);
+                            isNackConsecutive = false;
+
+                            if (isAckConsecutive == true)
+                            {
+                                count++;
+                                if (count >= 5)
+                                    delay -= 25;
+                            }
+                            else
+                            {
+                                isAckConsecutive = true;
+                                count = 1;
+                            }
+                            Console.WriteLine();
+                            Console.WriteLine("Ack: " + isAckConsecutive);
+                            Console.WriteLine("Nack:" + isNackConsecutive);
+                            Console.WriteLine("Count: " + count);
+                            Console.WriteLine("Delay: " + delay);
                             Console.WriteLine("Sent ACK!");
 
                             if (receivedData == "00000011")
@@ -89,7 +135,7 @@ namespace ReceiverTCP
                                 break;
                             }
                             string decodedString = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedData));
-                            Console.Write(decodedString);
+                            Console.WriteLine(decodedString);
                             receivedBits = "";
                             receiveData();
                             lastReceived = DateTime.Now;
