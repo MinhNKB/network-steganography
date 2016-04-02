@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Sockets;
 using System.Text;
@@ -14,6 +15,9 @@ namespace SenderTCP
         static NetworkStream networkStream;
         static string IP;
         static int port;
+        static int delay;
+        static int countACK, countNACK;
+        static string content;
         static void Main(string[] args)
         {
             //byte crc = Crc8.ComputeChecksum(1, 0, 1, 0, 1, 1, 1, 1);
@@ -33,17 +37,26 @@ namespace SenderTCP
 
             while (true)
             {
-                Console.Write("Receiver IP: ");
-                IP = Console.ReadLine();
-                Console.Write("Receiver port: ");
-                port = Int32.Parse(Console.ReadLine());
+                //Console.Write("Receiver IP: ");
+                //IP = Console.ReadLine();
+                //Console.Write("Receiver port: ");
+                //port = Int32.Parse(Console.ReadLine());              
+                //Console.Write("Delay: ");
+                //int delay = int.Parse(Console.ReadLine());
 
-                int delay;
-                Console.Write("Delay: ");
-                delay = int.Parse(Console.ReadLine());
+                IP = "171.248.28.109";
+                port = 5050;
+                delay = 900;
+                countACK = 0;
+                countNACK = 0;
 
-                Console.Write("Message: ");
-                string content = Console.ReadLine();
+                //Console.Write("Message: ");
+                //content = Console.ReadLine();
+
+                StreamReader fileReader = new StreamReader("Test.txt");
+                content = fileReader.ReadToEnd();
+
+
                 string binaryString = ToBinary(ConvertToByteArray(content, Encoding.ASCII));
                 binaryString += "00000011";
                 binaryString = binaryString.Replace(" ", "");
@@ -73,10 +86,11 @@ namespace SenderTCP
                     sendPacket();
                     int count = 0;
                     for (int j = 0; j < temp.Length;j++ )
-                    {
+                    {                      
                         Console.WriteLine(temp[j]);
                         if (temp[j] == '1')
                         {
+                            Console.WriteLine("Delay: " + delay);
                             Thread.Sleep(delay);
                             sendPacket();
                         }
@@ -88,15 +102,30 @@ namespace SenderTCP
                     byte[] ACK = new byte[1];
                     networkStream.Read(ACK, 0, 1);
                     if(ACK[0]==1)
-                    {
-                        Console.WriteLine("ACK");
+                    {                     
                         i += 8;
                         checkNew = true;
+                        countNACK = 0;
+                        countACK++;
+                        Console.WriteLine("ACK " + countACK);
+                        if(countACK>=5)
+                        {
+                            delay -= 50;                           
+                            Console.WriteLine("New delay: " + delay);
+                        }
                     }
                     else
-                    {
-                        Console.WriteLine("NACK");
+                    {                        
                         checkNew = false;
+                        countACK = 0;
+                        countNACK++;
+                        Console.WriteLine("NACK " + countNACK);
+                        if (countNACK >= 5)
+                        {
+                            delay += 100;
+                            countNACK = 0;
+                            Console.WriteLine("New delay: " + delay);
+                        }
                     }
                 }
                 Console.WriteLine("Finished!");
@@ -105,11 +134,10 @@ namespace SenderTCP
             }
             
         }
-        static int GlobalCount = 0;
+        
         static void sendPacket()
         {
-            byte[] data = new byte[1];
-            Console.WriteLine("Global: " + GlobalCount++);
+            byte[] data = new byte[1];            
             networkStream.Write(data, 0, data.Length);
         }
 
