@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Sockets;
 using System.Text;
@@ -16,6 +17,7 @@ namespace SenderTCP
         static int port;
         static int delay;
         static int countACK, countNACK;
+        static string content;
         static void Main(string[] args)
         {
             //byte crc = Crc8.ComputeChecksum(1, 0, 1, 0, 1, 1, 1, 1);
@@ -44,12 +46,17 @@ namespace SenderTCP
 
                 IP = "171.248.28.109";
                 port = 5050;
-                delay = 500;
+                delay = 900;
                 countACK = 0;
                 countNACK = 0;
 
-                Console.Write("Message: ");
-                string content = Console.ReadLine();
+                //Console.Write("Message: ");
+                //content = Console.ReadLine();
+
+                StreamReader fileReader = new StreamReader("Test.txt");
+                content = fileReader.ReadToEnd();
+
+
                 string binaryString = ToBinary(ConvertToByteArray(content, Encoding.ASCII));
                 binaryString += "00000011";
                 binaryString = binaryString.Replace(" ", "");
@@ -79,10 +86,11 @@ namespace SenderTCP
                     sendPacket();
                     int count = 0;
                     for (int j = 0; j < temp.Length;j++ )
-                    {
+                    {                      
                         Console.WriteLine(temp[j]);
                         if (temp[j] == '1')
                         {
+                            Console.WriteLine("Delay: " + delay);
                             Thread.Sleep(delay);
                             sendPacket();
                         }
@@ -114,7 +122,8 @@ namespace SenderTCP
                         Console.WriteLine("NACK " + countNACK);
                         if (countNACK >= 5)
                         {
-                            delay *= 2;                            
+                            delay += 100;
+                            countNACK = 0;
                             Console.WriteLine("New delay: " + delay);
                         }
                     }
