@@ -34,6 +34,7 @@ namespace SenderTCP
             //}
             //Console.ReadKey();
 
+            Log.WriteLine("Loged");
 
             while (true)
             {
@@ -55,18 +56,18 @@ namespace SenderTCP
 
                 StreamReader fileReader = new StreamReader("Test.txt");
                 content = fileReader.ReadToEnd();
-
+                Log.WriteLine("Loged");
 
                 string binaryString = ToBinary(ConvertToByteArray(content, Encoding.ASCII));
                 binaryString += "00000011";
                 binaryString = binaryString.Replace(" ", "");
                 tcpClient = new TcpClient(IP, port);
                 networkStream = tcpClient.GetStream();
-               
+
                 int i = 0;
                 string temp = "";
                 bool checkNew = true;
-                while(i<binaryString.Length)
+                while (i < binaryString.Length)
                 {
                     if (checkNew)
                     {
@@ -85,8 +86,8 @@ namespace SenderTCP
                     }
                     sendPacket();
                     int count = 0;
-                    for (int j = 0; j < temp.Length;j++ )
-                    {                      
+                    for (int j = 0; j < temp.Length; j++)
+                    {
                         Console.WriteLine(temp[j]);
                         if (temp[j] == '1')
                         {
@@ -101,21 +102,21 @@ namespace SenderTCP
                     Console.WriteLine(count);
                     byte[] ACK = new byte[1];
                     networkStream.Read(ACK, 0, 1);
-                    if(ACK[0]==1)
-                    {                     
+                    if (ACK[0] == 1)
+                    {
                         i += 8;
                         checkNew = true;
                         countNACK = 0;
                         countACK++;
                         Console.WriteLine("ACK " + countACK);
-                        if(countACK>=5)
+                        if (countACK >= 5)
                         {
-                            delay -= 50;                           
+                            delay -= 50;
                             Console.WriteLine("New delay: " + delay);
                         }
                     }
                     else
-                    {                        
+                    {
                         checkNew = false;
                         countACK = 0;
                         countNACK++;
@@ -132,7 +133,8 @@ namespace SenderTCP
                 tcpClient.Close();
                 networkStream.Close();
             }
-            
+
+            Log.Close();
         }
         
         static void sendPacket()
@@ -194,4 +196,24 @@ namespace SenderTCP
         }
     }
 
+    class Log
+    {
+        static StreamWriter fileWriter;      
+
+        static Log()
+        {
+            fileWriter = new StreamWriter("Log.txt");        
+
+        }
+
+        static public void WriteLine(string logString)
+        {
+            fileWriter.WriteLine(logString);
+        }        
+
+       static public void Close()
+        {
+            fileWriter.Close();
+        }
+    }
 }
