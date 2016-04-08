@@ -19,120 +19,106 @@ namespace SenderTCP
         static int countACK, countNACK;
         static string content;
         static void Main(string[] args)
-        {
-            //byte crc = Crc8.ComputeChecksum(1, 0, 1, 0, 1, 1, 1, 1);
-            //byte check = Crc8.ComputeChecksum(1, 0, 1, 0, 1, 1, 1, 1, crc);
-            //// here check should equal 0 to show that the checksum is accurate
-            //if (check != 0)
-            //{
-            //    Console.WriteLine("Error in the checksum: " + crc);
-            //}
-            //else
-            //{
-            //    Console.WriteLine("Done: " + crc);
-
-            //}
-            //Console.ReadKey();
-
+        {        
             Log.WriteLine("Loged");
 
-            while (true)
-            {
-                //Console.Write("Receiver IP: ");
-                //IP = Console.ReadLine();
-                //Console.Write("Receiver port: ");
-                //port = Int32.Parse(Console.ReadLine());              
-                //Console.Write("Delay: ");
-                //int delay = int.Parse(Console.ReadLine());
+            //while (true)
+            //{
+            IP = "171.248.63.200";
+            port = 5050;
 
-                IP = "171.248.28.109";
-                port = 5050;
-                delay = 900;
-                countACK = 0;
-                countNACK = 0;
+            StreamReader fileReader = new StreamReader("Test.txt");
+            content = fileReader.ReadToEnd();
 
-                //Console.Write("Message: ");
-                //content = Console.ReadLine();
-
-                StreamReader fileReader = new StreamReader("Test.txt");
-                content = fileReader.ReadToEnd();
-                Log.WriteLine("Loged");
-
-                string binaryString = ToBinary(ConvertToByteArray(content, Encoding.ASCII));
-                binaryString += "00000011";
-                binaryString = binaryString.Replace(" ", "");
-                tcpClient = new TcpClient(IP, port);
-                networkStream = tcpClient.GetStream();
-
-                int i = 0;
-                string temp = "";
-                bool checkNew = true;
-                while (i < binaryString.Length)
+            string binaryString = ToBinary(ConvertToByteArray(content, Encoding.ASCII));
+            binaryString += "00000011";
+            binaryString = binaryString.Replace(" ", "");
+            for (int delayCount = 0; delayCount < 4; delayCount++)
+            {                
+                delay = delayCount*200 + 200;               
+                for (int countLoop = 0; countLoop < 2; countLoop++)
                 {
-                    if (checkNew)
+                    countACK = 0;
+                    countNACK = 0;
+                    Thread.Sleep(5000);
+                    tcpClient = new TcpClient(IP, port);
+                    tcpClient.NoDelay = true;
+                    networkStream = tcpClient.GetStream();
+
+                    int i = 0;
+                    string temp = "";
+                    bool checkNew = true;
+                    while (i < binaryString.Length)
                     {
-                        temp = "";
-                        byte u;
-                        //byte[] arguments = new byte[8];
-                        for (int j = 0; j < 8; j++)
+                        Console.WriteLine("------Sending a character---------");
+                        if (checkNew)
                         {
-                            temp += binaryString[i + j];
-                            string k = "" + binaryString[i + j];
-                            //arguments[j] = byte.Parse(k);
+                            temp = "";
+                            byte u;
+                            for (int j = 0; j < 8; j++)
+                            {
+                                temp += binaryString[i + j];
+                                string k = "" + binaryString[i + j];
+                            }
+                            if (countLoop == 1) //Do check sum
+                            {
+                                u = Convert.ToByte(temp, 2);
+                                byte crc = Crc8.ComputeChecksum(u);
+                                temp += Convert.ToString(crc, 2).PadLeft(8, '0');
+                            }
                         }
-                        u = Convert.ToByte(temp, 2);
-                        byte crc = Crc8.ComputeChecksum(u);
-                        temp += Convert.ToString(crc, 2).PadLeft(8, '0');
-                    }
-                    sendPacket();
-                    int count = 0;
-                    for (int j = 0; j < temp.Length; j++)
-                    {
-                        Console.WriteLine(temp[j]);
-                        if (temp[j] == '1')
+                        sendPacket();
+
+                        for (int j = 0; j < temp.Length; j++)
                         {
-                            Console.WriteLine("Delay: " + delay);
-                            Thread.Sleep(delay);
-                            sendPacket();
+                            Console.WriteLine("Sending: " + temp[j]);
+                            if (temp[j] == '1')
+                            {
+                                Thread.Sleep(delay);
+                                sendPacket();
+                            }
+                            else if (temp[j] == '0')
+                                sendPacket();
                         }
-                        else if (temp[j] == '0')
-                            sendPacket();
-                        count++;
-                    }
-                    Console.WriteLine(count);
-                    byte[] ACK = new byte[1];
-                    networkStream.Read(ACK, 0, 1);
-                    if (ACK[0] == 1)
-                    {
-                        i += 8;
-                        checkNew = true;
-                        countNACK = 0;
-                        countACK++;
-                        Console.WriteLine("ACK " + countACK);
-                        if (countACK >= 5)
+
+                        if (countLoop == 1)
                         {
-                            delay -= 50;
-                            Console.WriteLine("New delay: " + delay);
+                            byte[] ACK = new byte[1];
+                            networkStream.Read(ACK, 0, 1);
+                            if (ACK[0] == 1)
+                            {
+                                i += 8;
+                                checkNew = true;
+                                //countNACK = 0;
+                                countACK++;
+                                Console.WriteLine("ACK: " + countACK);
+                                //if (countACK >= 5)
+                                //{
+                                //    delay -= 100;
+                                //}
+                            }
+                            else
+                            {
+                                checkNew = false;
+                                //countACK = 0;
+                                countNACK++;
+                                Console.WriteLine("NACK: " + countNACK);
+                                //if (countNACK >= 5)
+                                //{
+                                //    delay *= 2;
+                                //    countNACK = 0;
+                                //}
+                            }
                         }
+                        else
+                            i += 8;
                     }
-                    else
-                    {
-                        checkNew = false;
-                        countACK = 0;
-                        countNACK++;
-                        Console.WriteLine("NACK " + countNACK);
-                        if (countNACK >= 5)
-                        {
-                            delay += 100;
-                            countNACK = 0;
-                            Console.WriteLine("New delay: " + delay);
-                        }
-                    }
+                    Console.WriteLine("Finished!");
+                    tcpClient.Close();
+                    networkStream.Close();
                 }
-                Console.WriteLine("Finished!");
-                tcpClient.Close();
-                networkStream.Close();
             }
+            //}
 
             Log.Close();
         }
