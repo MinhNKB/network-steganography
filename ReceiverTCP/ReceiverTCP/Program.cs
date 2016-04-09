@@ -28,14 +28,14 @@ namespace ReceiverTCP
 
         static void Main(string[] args)
         {
-            for (int i = 0; i < 2; ++i)
+            delay = 100;
+            for (int i = 0; i < 4; ++i)
             {
-                inputHostInfo();
-                initConnection();
-
-                receiveData(i);
-
-                tcpListener.Stop();
+                for (int j = 0; j < 2; ++j)
+                {
+                    receiveData(j);
+                }
+                delay += 100;
             }
         }
 
@@ -45,9 +45,11 @@ namespace ReceiverTCP
             switch (strategy)
             {
                 case 0:
+                    Console.WriteLine("Starting Pure - " + delay);
                     applyPure();
                     break;
                 case 1:
+                    Console.WriteLine("Starting CRC - " + delay);
                     applyCRC();
                     break;
             }
@@ -55,113 +57,146 @@ namespace ReceiverTCP
 
         private static void applyPure()
         {
-            receivedBits = "";
-            decodedString = "";
-
             StreamWriter binaryWriter = new StreamWriter("Pure-Binary-" + delay + ".txt", false);
             StreamWriter stringWriter = new StreamWriter("Pure-String-" + delay + ".txt", false);
             StreamWriter infoWriter = new StreamWriter("Pure-Info-" + delay + ".txt", false);
-
-            receiveFirstEmptySignal();
-
-            while (true)
+            try
             {
-                receiveSignal();
-                currentReceived = DateTime.Now;
+                inputHostInfo();
+                initConnection();
 
-                processNewBit();
-                lastReceived = currentReceived;
+                int numberOfReceivedBits = 0;
+                receivedBits = "";
+                decodedString = "";
 
-                if (receivedBits.Length == 8)
+                receiveFirstEmptySignal();
+
+                while (true)
                 {
-                    Console.WriteLine(receivedBits);
-                    binaryWriter.WriteLine(receivedBits);
+                    receiveSignal();
+                    currentReceived = DateTime.Now;
 
-                    if (receivedBits == "00000011")
+                    processNewBit();
+                    lastReceived = currentReceived;
+
+                    numberOfReceivedBits++;
+
+                    if (receivedBits.Length == 8)
                     {
-                        writeFinishMessage();
-                        infoWriter.WriteLine("Time: " + DateTime.Now.Subtract(startTime).Seconds);
-                        break;
+                        Console.WriteLine(receivedBits);
+                        binaryWriter.Write(receivedBits);
+
+                        if (numberOfReceivedBits == 8040)
+                        {
+                            writeFinishMessage();
+                            infoWriter.WriteLine("Time: " + DateTime.Now.Subtract(startTime).TotalSeconds);
+                            break;
+                        }
+
+                        string decodedCharacter = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedBits));
+                        decodedString += decodedCharacter;
+                        
+                        stringWriter.Write(decodedCharacter);
+                        Console.WriteLine(decodedString);
+                        receiveFirstEmptySignal();
                     }
 
-                    string decodedCharacter = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedBits));
-                    decodedString += decodedCharacter;
 
-                    stringWriter.Write(decodedCharacter);
-                    Console.WriteLine(decodedString);
-                    receiveFirstEmptySignal();
                 }
             }
+            finally
+            {
+                tcpListener.Stop();
+                tcpClient.Close();
+                networkStream.Close();
 
-            binaryWriter.Close();
-            stringWriter.Close();
-            infoWriter.Close();
+                binaryWriter.Close();
+                stringWriter.Close();
+                infoWriter.Close();
+            }
         }
 
 
         
         private static void applyCRC()
         {
-            int numberOfACKs = 0;
-            int numberOfNACKs = 0;
-            receivedBits = "";
-            decodedString = "";
-
             StreamWriter binaryWriter = new StreamWriter("CRC-Binary-" + delay + ".txt", false);
             StreamWriter stringWriter = new StreamWriter("CRC-String-" + delay + ".txt", false);
             StreamWriter infoWriter = new StreamWriter("CRC-Info-" + delay + ".txt", false);
 
-            receiveFirstEmptySignal();
-
-            while (true)
+            try
             {
-                receiveSignal();
-                currentReceived = DateTime.Now;
+                inputHostInfo();
+                initConnection();
 
-                processNewBit();
-                lastReceived = currentReceived;
+                int numberOfACKs = 0;
+                int numberOfNACKs = 0;
+                receivedBits = "";
+                decodedString = "";
 
-                if (receivedBits.Length == 16)
+                
+
+                receiveFirstEmptySignal();
+                while (true)
                 {
-                    Console.WriteLine(receivedBits);
+                    receiveSignal();
+                    currentReceived = DateTime.Now;
 
-                    string receivedData = receivedBits.Substring(0, 8);
-                    string receivedCrc = receivedBits.Substring(8, 8);
-                    if (checkSum(receivedData, receivedCrc) == false)
-                    {
-                        sendResponse(false);
-                        ++numberOfNACKs;
-                        Console.WriteLine("NACK: " + numberOfNACKs);
-                    }
-                    else
-                    {
-                        sendResponse(true);
-                        ++numberOfACKs;
-                        Console.WriteLine("ACK: " + numberOfACKs);
-                        binaryWriter.WriteLine(receivedBits);
+                    processNewBit();
+                    lastReceived = currentReceived;
 
-                        if (receivedData == "00000011")
+                    if (receivedBits.Length == 16)
+                    {
+                        Console.WriteLine(receivedBits);
+
+                        string receivedData = receivedBits.Substring(0, 8);
+                        string receivedCrc = receivedBits.Substring(8, 8);
+                        if (checkSum(receivedData, receivedCrc) == false)
                         {
-                            writeFinishMessage();
-                            infoWriter.WriteLine("Number of ACK: " + numberOfACKs);
-                            infoWriter.WriteLine("Number of NACK: " + numberOfNACKs);
-                            infoWriter.WriteLine("Time: " + DateTime.Now.Subtract(startTime).Seconds);
-                            break;
+                            sendResponse(false);
+                            //adjustNACKDelay();
+                            ++numberOfNACKs;
+                            Console.WriteLine("NACK: " + numberOfNACKs);
                         }
-                        
-                        string decodedCharacter = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedData));
-                        decodedString += decodedCharacter;
+                        else
+                        {
+                            sendResponse(true);
+                            //adjustACKDelay();
+                            ++numberOfACKs;
+                            Console.WriteLine("ACK: " + numberOfACKs);
+                            binaryWriter.Write(receivedBits);
 
-                        stringWriter.Write(decodedCharacter);
-                        Console.WriteLine(decodedString);
+                            if (receivedData == "00000011")
+                            {
+                                writeFinishMessage();
+                                infoWriter.WriteLine("Number of ACK: " + numberOfACKs);
+                                infoWriter.WriteLine("Number of NACK: " + numberOfNACKs);
+                                infoWriter.WriteLine("Time: " + DateTime.Now.Subtract(startTime).TotalSeconds);
+                                break;
+                            }
+
+                            string decodedCharacter = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedData));
+                            decodedString += decodedCharacter;
+
+                            stringWriter.Write(decodedCharacter);
+                            Console.WriteLine(decodedString);
+                        }
+                        receiveFirstEmptySignal();
                     }
-                    receiveFirstEmptySignal();
                 }
             }
+            finally
+            {
+                tcpListener.Stop();
+                tcpClient.Close();
+                networkStream.Close();
 
-            binaryWriter.Close();
-            stringWriter.Close();
-            infoWriter.Close();
+                binaryWriter.Close();
+                stringWriter.Close();
+                infoWriter.Close();
+            }
+            
+
         }
 
         private static void receiveFirstEmptySignal()
@@ -200,7 +235,7 @@ namespace ReceiverTCP
             {
                 consecutiveCount++;
                 if (consecutiveCount >= 5)
-                    delay -= 25;
+                    delay -= 50;
             }
             else
             {
@@ -214,10 +249,9 @@ namespace ReceiverTCP
         {
             Console.WriteLine();
             Console.WriteLine("Ack: " + isAckConsecutive);
-            Console.WriteLine("Nack:" + isNackConsecutive);
+            Console.WriteLine("Nack: " + isNackConsecutive);
             Console.WriteLine("Count: " + consecutiveCount);
             Console.WriteLine("Delay: " + delay);
-            Console.WriteLine("Sent ACK!");
         }
 
 
@@ -229,7 +263,7 @@ namespace ReceiverTCP
                 consecutiveCount++;
                 if (consecutiveCount == 5)
                 {
-                    delay += 50;
+                    delay *= 2;
                     consecutiveCount = 0;
                     isNackConsecutive = false;
                 }
@@ -244,9 +278,15 @@ namespace ReceiverTCP
         private static void processNewBit()
         {
             if (currentReceived.Subtract(lastReceived).Milliseconds > delay)
+            {
+                //Console.WriteLine(currentReceived.Subtract(lastReceived).Milliseconds + "-1");
                 receivedBits += 1;
-            else
+            }
+            else 
+            {
+                //Console.WriteLine(currentReceived.Subtract(lastReceived).Milliseconds + "-0");
                 receivedBits += 0;
+            }
         }
 
         private static void initConnection()
@@ -275,7 +315,6 @@ namespace ReceiverTCP
             //delay = Int32.Parse(Console.ReadLine());
             ip = "192.168.1.106";
             port = 5050;
-            delay = 300;
         }
 
         static bool checkSum(string receivedData, string receivedCrc)
