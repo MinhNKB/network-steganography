@@ -1,0 +1,6 @@
+c:\users\nkbmi\onedrive\documents\visual studio 2013\Projects\Stega_CompareResults\Stega_CompareResults\bin\Debug\Stega_CompareResults.exe.config
+C:\Users\nkbmi\OneDrive\Documents\Visual Studio 2013\Projects\Stega_CompareResults\Stega_CompareResults\obj\Debug\Stega_CompareResults.csprojResolveAssemblyReference.cache
+C:\Users\nkbmi\OneDrive\Documents\Visual Studio 2013\Projects\Stega_CompareResults\Stega_CompareResults\bin\Debug\Stega_CompareResults.exe
+C:\Users\nkbmi\OneDrive\Documents\Visual Studio 2013\Projects\Stega_CompareResults\Stega_CompareResults\bin\Debug\Stega_CompareResults.pdb
+C:\Users\nkbmi\OneDrive\Documents\Visual Studio 2013\Projects\Stega_CompareResults\Stega_CompareResults\obj\Debug\Stega_CompareResults.exe
+C:\Users\nkbmi\OneDrive\Documents\Visual Studio 2013\Projects\Stega_CompareResults\Stega_CompareResults\obj\Debug\Stega_CompareResults.pdb
