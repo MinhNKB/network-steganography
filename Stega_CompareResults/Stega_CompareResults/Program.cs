@@ -12,21 +12,24 @@ namespace Stega_CompareResults
         const int NUMBER_OF_RESULT = 3;
         static void Main(string[] args)
         {
+            StreamWriter writer = new StreamWriter("log.txt");
             StreamReader reader;
-            reader = new StreamReader("data.txt");
+            reader = new StreamReader("data-string.txt");
             String dataString = reader.ReadToEnd();
             reader.Close();
-            for(int i=0;i< NUMBER_OF_RESULT;i++)
+            for(int i=1;i<=NUMBER_OF_RESULT;i++)
             {
-                reader = new StreamReader("result" + i.ToString() + ".txt");
+                reader = new StreamReader("CRC-String-" + (i*100).ToString() + ".txt");
                 String resultString = reader.ReadToEnd();
                 reader.Close();
 
                 int countSimilar = CountSimilarBetweenTwoString(dataString, resultString);
                 double percentage = (double)countSimilar / (double)dataString.Length * 100;
 
-                Console.WriteLine("Result " + i.ToString() + ": " + countSimilar.ToString() + "/" + dataString.Length + " - " + percentage.ToString("00.00") + "%");
+                writer.WriteLine("Ping " + (i * 100).ToString() + ": " + countSimilar.ToString() + "/" + dataString.Length + " - " + percentage.ToString("00.00") + "%");
+                Console.WriteLine("Ping " + (i * 100).ToString() + ": " + countSimilar.ToString() + "/" + dataString.Length + " - " + percentage.ToString("00.00") + "%");
             }
+            writer.Close();
             Console.ReadKey();
         }
 
