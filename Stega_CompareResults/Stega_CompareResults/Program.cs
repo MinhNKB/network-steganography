@@ -9,7 +9,7 @@ namespace Stega_CompareResults
 {
     class Program
     {
-        const int NUMBER_OF_RESULT = 3;
+        const int NUMBER_OF_RESULT = 4;
         static void Main(string[] args)
         {
             StreamWriter writer = new StreamWriter("log.txt");
