@@ -26,16 +26,19 @@ namespace ReceiverTCP
         static string receivedBits = "";
         static string decodedString = "";
 
+        static int prefix = 0;
+
         static void Main(string[] args)
         {
-            delay = 100;
-            for (int i = 0; i < 4; ++i)
+            while (true)
             {
-                for (int j = 0; j < 2; ++j)
+                delay = 100;
+                for (int i = 0; i < 4; ++i)
                 {
-                    receiveData(j);
+                    receiveData(1);
+                    delay += 100;
                 }
-                delay += 100;
+                ++prefix;
             }
         }
 
@@ -95,7 +98,7 @@ namespace ReceiverTCP
 
                         string decodedCharacter = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedBits));
                         decodedString += decodedCharacter;
-                        
+
                         stringWriter.Write(decodedCharacter);
                         Console.WriteLine(decodedString);
                         receiveFirstEmptySignal();
@@ -115,8 +118,6 @@ namespace ReceiverTCP
                 infoWriter.Close();
             }
         }
-
-
         
         private static void applyCRC()
         {
@@ -133,7 +134,6 @@ namespace ReceiverTCP
                 int numberOfNACKs = 0;
                 receivedBits = "";
                 decodedString = "";
-
                 
 
                 receiveFirstEmptySignal();
@@ -305,16 +305,9 @@ namespace ReceiverTCP
 
         private static void inputHostInfo()
         {
-            //Console.Write("Receiver IP: ");
-            //ip = Console.ReadLine();
-
-            //Console.Write("Receiver Port: ");
-            //port = Int32.Parse(Console.ReadLine());
-
-            //Console.Write("Delay: ");
-            //delay = Int32.Parse(Console.ReadLine());
-            ip = "192.168.1.106";
-            port = 5050;
+            StreamReader reader = new StreamReader("HostInfo.txt");
+            ip = reader.ReadLine();
+            port = Int32.Parse(reader.ReadLine());
         }
 
         static bool checkSum(string receivedData, string receivedCrc)
@@ -329,6 +322,7 @@ namespace ReceiverTCP
         static void receiveSignal()
         {
             byte[] data = new byte[1];
+            networkStream.ReadTimeout = 20000;
             networkStream.Read(data, 0, 1);
         }
         static byte[] convertStringBytesToBytes(string input)

@@ -9,9 +9,10 @@ namespace Stega_CompareResults
 {
     class Program
     {
-        const int NUMBER_OF_RESULT = 3;
+        const int NUMBER_OF_RESULT = 4;
         static void Main(string[] args)
         {
+            StreamWriter writer = new StreamWriter("Result.txt");
             StreamReader reader;
             reader = new StreamReader("data.txt");
             String dataString = reader.ReadToEnd();
@@ -25,9 +26,9 @@ namespace Stega_CompareResults
                 int countSimilar = CountSimilarBetweenTwoString(dataString, resultString);
                 double percentage = (double)countSimilar / (double)dataString.Length * 100;
 
+                writer.WriteLine("Delay " + ((i + 1) * 100) + ": " + countSimilar.ToString() + "/" + dataString.Length + " - " + percentage.ToString("00.00") + "%");
                 Console.WriteLine("Result " + i.ToString() + ": " + countSimilar.ToString() + "/" + dataString.Length + " - " + percentage.ToString("00.00") + "%");
             }
-            Console.ReadKey();
         }
 
         private static int CountSimilarBetweenTwoString(string dataString, string resultString)
