@@ -25,94 +25,97 @@ namespace SenderTCP
         static string content;
         static string binaryContent;
 
+        const int DELAY_COUNT = 1;
+
         static void Main(string[] args)
         {        
             Log.WriteLine("Loged");
             inputReceiverInfo();
+            prepareBinaryData();
             for (int i = 0; i < timesToRun; ++i)
             {
-                run(i);
-                Thread.Sleep(10000);
+                try
+                {
+                    Console.WriteLine("------------The " + i + "th run------------");
+                    run();
+                }
+                catch(Exception ex)
+                {
+                    Console.WriteLine("Exception: " + ex.Message);
+                    i--;
+                }
+                
             }
             Log.Close();
         }
 
-        private static void run(int prefix)
+        private static void run()
         {
-            prepareBinaryData();
-            
-            for (int delayCount = 0; delayCount < 4; delayCount++)
+            for (int delayCount = 0; delayCount < DELAY_COUNT; delayCount++)
             {
                 delay = delayCount * 200 + 200;
+                Console.WriteLine("Run with delay: " + delay);
                 countACK = 0;
                 countNACK = 0;
-                Thread.Sleep(5000);
+                Thread.Sleep(1000);
 
                 int i = 0;
                 string temp = "";
                 bool checkNew = true;
 
-                if (connectToReceiver(i) == false)
-                    return;
+                connectToReceiver();
 
                 while (i < binaryContent.Length)
                 {
-                    try
-                    {
-                        Console.WriteLine("------Sending a character------");
-                        if (checkNew)
-                        {
-                            temp = "";
-                            byte u;
-                            for (int j = 0; j < 8; j++)
-                            {
-                                temp += binaryContent[i + j];
-                                string k = "" + binaryContent[i + j];
-                            }
-                            if (temp == "00000000")
-                            {
-                                i += 8;
-                                continue;
-                            }
-                            u = Convert.ToByte(temp, 2);
-                            byte crc = Crc8.ComputeChecksum(u);
-                            temp += Convert.ToString(crc, 2).PadLeft(8, '0');
-                        }
-                        sendEmptyPacket();
-                        for (int j = 0; j < temp.Length; j++)
-                        {
-                            Console.WriteLine("Sending: " + temp[j]);
-                            if (temp[j] == '1')
-                            {
-                                Thread.Sleep(delay);
-                                sendEmptyPacket();
-                            }
-                            else if (temp[j] == '0')
-                                sendEmptyPacket();
-                        }
 
-                        byte[] ACK = new byte[1];
-                        networkStream.Read(ACK, 0, 1);
-                        if (ACK[0] == 1)
+                    Console.WriteLine("Sending a character: ");
+                    if (checkNew)
+                    {
+                        temp = "";
+                        byte u;
+                        for (int j = 0; j < 8; j++)
+                        {
+                            temp += binaryContent[i + j];
+                            string k = "" + binaryContent[i + j];
+                        }
+                        if (temp == "00000000")
                         {
                             i += 8;
-                            checkNew = true;
-                            countACK++;
-                            Console.WriteLine("ACK: " + countACK);
+                            continue;
                         }
-                        else
-                        {
-                            checkNew = false;
-                            countNACK++;
-                            Console.WriteLine("NACK: " + countNACK);
-                        }
+                        u = Convert.ToByte(temp, 2);
+                        byte crc = Crc8.ComputeChecksum(u);
+                        temp += Convert.ToString(crc, 2).PadLeft(8, '0');
                     }
-                    catch (Exception ex)
+                    sendEmptyPacket();
+                    for (int j = 0; j < temp.Length; j++)
                     {
-                        Log.WriteLine(ex.ToString());
-                        if (connectToReceiver(i) == false)
-                            return;
+                        Console.WriteLine("Sending: " + temp[j]);
+                        if (temp[j] == '1')
+                        {
+                            Thread.Sleep(delay);
+                            sendEmptyPacket();
+                        }
+                        else if (temp[j] == '0')
+                            sendEmptyPacket();
                     }
+
+                    byte[] ACK = new byte[1];
+                    networkStream.Read(ACK, 0, 1);
+                    if (ACK[0] == 1)
+                    {
+                        i += 8;
+                        checkNew = true;
+                        countACK++;
+                        Console.WriteLine("ACK: " + countACK);
+                    }
+                    else
+                    {
+                        checkNew = false;
+                        countNACK++;
+                        Console.WriteLine("NACK: " + countNACK);
+                    }
+
                 }
                 Console.WriteLine("Finished!");
                 tcpClient.Close();
@@ -120,25 +123,11 @@ namespace SenderTCP
             }
         }
 
-        private static bool connectToReceiver(int index)
+        private static void connectToReceiver()
         {
-            for (int i = 0; i < 10; ++i)
-            {
-                try
-                {
-                    tcpClient = new TcpClient(IP, port);
-                    tcpClient.NoDelay = true;
-                    networkStream = tcpClient.GetStream();
-                    sendPacket(index);
-                    return true;
-                }
-                catch (Exception connectEx)
-                {
-                    Log.WriteLine(connectEx.ToString());
-                    Thread.Sleep(10000);
-                }
-            }
-            return false;
+            tcpClient = new TcpClient(IP, port);
+            tcpClient.NoDelay = true;
+            networkStream = tcpClient.GetStream();
         }
 
         private static void prepareBinaryData()
