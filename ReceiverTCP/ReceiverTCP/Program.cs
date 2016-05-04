@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -25,6 +26,8 @@ namespace ReceiverTCP
 
         static string binaryContent = "";
         static string stringContent = "";
+        static string compressedStringContent = "";
+        static string compressedBinaryContent = "";
 
         static int numberOfACKs = 0;
         static int numberOfNACKs = 0;
@@ -40,6 +43,8 @@ namespace ReceiverTCP
             numberOfNACKs = 0;
             receivedByte = "";
             binaryContent = "";
+            compressedStringContent = "";
+            compressedBinaryContent = "";
             stringContent = "";
         }
 
@@ -96,6 +101,7 @@ namespace ReceiverTCP
                 int numberOfReceivedBits = 0;
                 receivedByte = "";
                 stringContent = "";
+                compressedStringContent = "";
 
                 receiveFirstEmptySignal();
 
@@ -121,11 +127,11 @@ namespace ReceiverTCP
                             break;
                         }
 
-                        string decodedCharacter = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedByte));
-                        stringContent += decodedCharacter;
-
-                        stringWriter.Write(decodedCharacter);
-                        Console.WriteLine(stringContent);
+                        //string decodedCharacter = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedByte));
+                        //stringContent += decodedCharacter;
+                        compressedStringContent += receivedByte;
+                        //stringWriter.Write(decodedCharacter);
+                        //Console.WriteLine(stringContent);
                         receiveFirstEmptySignal();
                     }
 
@@ -154,7 +160,6 @@ namespace ReceiverTCP
                     initConnection();
                     initValues();
 
-
                     receiveFirstEmptySignal();
                     while (true)
                     {
@@ -170,7 +175,8 @@ namespace ReceiverTCP
 
                             string receivedData = receivedByte.Substring(0, 8);
                             string receivedCrc = receivedByte.Substring(8, 8);
-                            if (checkSum(receivedData, receivedCrc) == false || receivedData == "00000000")
+                            //if (checkSum(receivedData, receivedCrc) == false || receivedData == "00000000")
+                            if (checkSum(receivedData, receivedCrc) == false)
                             {
                                 sendResponse(false);
                                 //adjustNACKDelay();
@@ -185,7 +191,10 @@ namespace ReceiverTCP
                                 Console.WriteLine("ACK: " + numberOfACKs);
                                 binaryContent += receivedByte;
 
-                                if (receivedData == "00000011")
+                                compressedStringContent += receivedData;
+
+                                //if (receivedData == "00000011")
+                                if (numberOfACKs == 612)
                                 {
                                     tcpListener.Stop();
                                     tcpClient.Close();
@@ -196,9 +205,9 @@ namespace ReceiverTCP
                                     break;
                                 }
 
-                                string decodedCharacter = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedData));
-                                stringContent += decodedCharacter;
-                                Console.WriteLine(stringContent);
+                                //string decodedCharacter = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedData));
+                                //stringContent += decodedCharacter;
+                                //Console.WriteLine(stringContent);
                             }
                             receiveFirstEmptySignal();
                         }
@@ -226,6 +235,7 @@ namespace ReceiverTCP
 
         private static void writeFinishMessage()
         {
+            decompressData();
             Console.WriteLine("Finished!");
             Console.WriteLine(DateTime.Now.Subtract(startTime).Seconds);
 
@@ -252,6 +262,37 @@ namespace ReceiverTCP
             resultWriter.WriteLine("\t\tString length: " + dataString.Length);
             resultWriter.WriteLine("\t\tPercentage: " + percentage.ToString("00.00"));
             resultWriter.Close();
+        }
+
+        private static void decompressData()
+        {
+            byte[] data = convertStringBytesToBytes(compressedStringContent);
+            stringContent = System.Text.Encoding.UTF8.GetString(Decompress(data));
+        }
+
+        static byte[] Decompress(byte[] gzip)
+        {
+            // Create a GZIP stream with decompression mode.
+            // ... Then create a buffer and write into while reading from the GZIP stream.
+            using (GZipStream stream = new GZipStream(new MemoryStream(gzip), CompressionMode.Decompress))
+            {
+                const int size = 4096;
+                byte[] buffer = new byte[size];
+                using (MemoryStream memory = new MemoryStream())
+                {
+                    int count = 0;
+                    do
+                    {
+                        count = stream.Read(buffer, 0, size);
+                        if (count > 0)
+                        {
+                            memory.Write(buffer, 0, count);
+                        }
+                    }
+                    while (count > 0);
+                    return memory.ToArray();
+                }
+            }
         }
 
         private static int CountSimilarBetweenTwoString(string dataString, string resultString)
