@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net.Sockets;
 using System.Runtime.Serialization.Formatters.Binary;
@@ -78,11 +79,11 @@ namespace SenderTCP
                             temp += binaryContent[i + j];
                             string k = "" + binaryContent[i + j];
                         }
-                        if (temp == "00000000")
-                        {
-                            i += 8;
-                            continue;
-                        }
+                        //if (temp == "00000000")
+                        //{
+                        //    i += 8;
+                        //    continue;
+                        //}
                         u = Convert.ToByte(temp, 2);
                         byte crc = Crc8.ComputeChecksum(u);
                         temp += Convert.ToString(crc, 2).PadLeft(8, '0');
@@ -135,8 +136,12 @@ namespace SenderTCP
             StreamReader fileReader = new StreamReader("Data.txt");
             content = fileReader.ReadToEnd();
 
-            binaryContent = ToBinary(ConvertToByteArray(content, Encoding.ASCII));
-            binaryContent += "00000011";
+            byte[] byteData = Encoding.ASCII.GetBytes(content);
+            byte[] compress = CompressUsingGzip(byteData);
+
+            //binaryContent = ToBinary(ConvertToByteArray(content, Encoding.ASCII));
+            binaryContent = ToBinary(compress);
+            //binaryContent += "00000011";
             binaryContent = binaryContent.Replace(" ", "");
 
             //To-do: apply compress algorithm here
@@ -187,5 +192,17 @@ namespace SenderTCP
             return string.Join(" ", data.Select(byt => Convert.ToString(byt, 2).PadLeft(8, '0')).ToArray());
         }
 
+        public static byte[] CompressUsingGzip(byte[] raw)
+        {
+            using (MemoryStream memory = new MemoryStream())
+            {
+                using (GZipStream gzip = new GZipStream(memory,
+                CompressionLevel.Optimal, true))
+                {
+                    gzip.Write(raw, 0, raw.Length);
+                }
+                return memory.ToArray();
+            }
+        }
     }
 }
