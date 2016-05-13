@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
@@ -15,133 +17,177 @@ namespace SenderTCP
         static TcpClient tcpClient;
         static NetworkStream networkStream;
 
+       
         static string IP;
         static int port;
         static int timesToRun;
 
-        static int delay;
+        //static int delay;
         static int countACK, countNACK;
         
         static string content;
         static string binaryContent;
+      
+        const int DELAY_COUNT = 4;
 
-        const int DELAY_COUNT = 1;
-
+        const int NUMBER_OF_PORT = 10;
+        static string[] binaryContents = new string[NUMBER_OF_PORT];
+        static TcpClient[] tcpClients = new TcpClient[NUMBER_OF_PORT];
+        static NetworkStream[] networkStreams = new NetworkStream[NUMBER_OF_PORT];
+        static List<Thread> threads;
+        static int delayCount = 0;
         static void Main(string[] args)
         {        
             Log.WriteLine("Loged");
             inputReceiverInfo();
-            prepareBinaryData();
+            prepareBinaryData();            
             for (int i = 0; i < timesToRun; ++i)
             {
+                
                 try
                 {
+                    delayCount = i % DELAY_COUNT;
+                    countACK = 0;
+                    countNACK = 0;
+                    threads = new List<Thread>();
                     Console.WriteLine("------------The " + i + "th run------------");
-                    run();
+                    Console.WriteLine("Run with delay: " + (delayCount * 200 + 200).ToString());
+                    for(int j=0;j<NUMBER_OF_PORT;j++)
+                    {
+                        Thread thread = new Thread(new ParameterizedThreadStart(Program.run));
+                        threads.Add(thread);
+                        thread.Start(j);                        
+                    }
+                    foreach (Thread thread in threads)
+                        thread.Join();
+                    threads.Clear();
+                    //if(i+1==timesToRun && delayCount+1<DELAY_COUNT)
+                    //{
+                    //    delayCount++;
+                    //    i = -1;
+                    //}
+                    
                 }
                 catch(Exception ex)
                 {
                     Console.WriteLine("Exception: " + ex.Message);
+                    foreach (Thread thread in threads)
+                        thread.Abort();
+                    threads.Clear();
                     i--;
+                    Thread.Sleep(5000);
                 }
                 
             }
             Log.Close();
+            Console.ReadKey();
         }
-
-        private static void run()
+       
+        private static void run(object obj)
         {
-            for (int delayCount = 0; delayCount < DELAY_COUNT; delayCount++)
+            int index = (int)obj;
+
+            int delay = delayCount * 200 + 200;                        
+            Thread.Sleep(1000);
+
+            int i = 0;
+            string temp = "";
+            bool checkNew = true;
+
+            connectToReceiver(index);
+
+            while (i < binaryContents[index].Length)
             {
-                delay = delayCount * 200 + 200;
-                Console.WriteLine("Run with delay: " + delay);
-                countACK = 0;
-                countNACK = 0;
-                Thread.Sleep(1000);
-
-                int i = 0;
-                string temp = "";
-                bool checkNew = true;
-
-                connectToReceiver();
-
-                while (i < binaryContent.Length)
+                if (checkNew)
                 {
-
-                    Console.WriteLine("Sending a character: ");
-                    if (checkNew)
+                    temp = "";
+                    byte u;
+                    for (int j = 0; j < 8; j++)
                     {
-                        temp = "";
-                        byte u;
-                        for (int j = 0; j < 8; j++)
-                        {
-                            temp += binaryContent[i + j];
-                            string k = "" + binaryContent[i + j];
-                        }
-                        if (temp == "00000000")
-                        {
-                            i += 8;
-                            continue;
-                        }
-                        u = Convert.ToByte(temp, 2);
-                        byte crc = Crc8.ComputeChecksum(u);
-                        temp += Convert.ToString(crc, 2).PadLeft(8, '0');
+                        temp += binaryContents[index][i + j];
+                        string k = "" + binaryContents[index][i + j];
                     }
-                    sendEmptyPacket();
-                    for (int j = 0; j < temp.Length; j++)
-                    {
-                        Console.WriteLine("Sending: " + temp[j]);
-                        if (temp[j] == '1')
-                        {
-                            Thread.Sleep(delay);
-                            sendEmptyPacket();
-                        }
-                        else if (temp[j] == '0')
-                            sendEmptyPacket();
-                    }
-
-                    byte[] ACK = new byte[1];
-                    networkStream.Read(ACK, 0, 1);
-                    if (ACK[0] == 1)
+                    if (temp == "00000000")
                     {
                         i += 8;
-                        checkNew = true;
-                        countACK++;
-                        Console.WriteLine("ACK: " + countACK);
+                        continue;
                     }
-                    else
-                    {
-                        checkNew = false;
-                        countNACK++;
-                        Console.WriteLine("NACK: " + countNACK);
-                    }
-
+                    u = Convert.ToByte(temp, 2);
+                    byte crc = Crc8.ComputeChecksum(u);
+                    temp += Convert.ToString(crc, 2).PadLeft(8, '0');
                 }
-                Console.WriteLine("Finished!");
-                tcpClient.Close();
-                networkStream.Close();
+                sendEmptyPacket(index);
+                for (int j = 0; j < temp.Length; j++)
+                {
+                    if (temp[j] == '1')
+                    {
+                        Thread.Sleep(delay);
+                        sendEmptyPacket(index);
+                    }
+                    else if (temp[j] == '0')
+                        sendEmptyPacket(index);
+                }
+
+                byte[] ACK = new byte[1];
+                networkStreams[index].Read(ACK, 0, 1);
+                if (ACK[0] == 1)
+                {
+                    i += 8;
+                    checkNew = true;
+                    countACK++;
+                    Console.WriteLine("ACK " + index + " : " + countACK);
+                }
+                else
+                {
+                    checkNew = false;
+                    countNACK++;
+                    Console.WriteLine("NACK " + index + " : " + countNACK);
+                }
+
             }
+            Console.WriteLine(index + " finished!");
+            tcpClients[index].Close();
+            networkStreams[index].Close();
+                     
         }
 
-        private static void connectToReceiver()
+        private static void connectToReceiver(int index)
         {
-            tcpClient = new TcpClient(IP, port);
-            tcpClient.NoDelay = true;
-            networkStream = tcpClient.GetStream();
+            tcpClients[index] = new TcpClient(IP, port + index);
+            Console.WriteLine("Port: " + (port + index));
+            tcpClients[index].NoDelay = true;
+            networkStreams[index] = tcpClients[index].GetStream();
         }
 
         private static void prepareBinaryData()
         {
             StreamReader fileReader = new StreamReader("Data.txt");
             content = fileReader.ReadToEnd();
+            binaryContent = ConvertStringToBinaryString(content);
+            int sizeOfAChunk = (int)Math.Ceiling((double)content.Length / NUMBER_OF_PORT);
 
-            binaryContent = ToBinary(ConvertToByteArray(content, Encoding.ASCII));
-            binaryContent += "00000011";
-            binaryContent = binaryContent.Replace(" ", "");
-
+            string[] contentChunks = new string[NUMBER_OF_PORT];
+            for (int i = 0; i < NUMBER_OF_PORT; i++)
+            {
+                if (i == NUMBER_OF_PORT - 1)
+                    binaryContents[i] = ConvertStringToBinaryString(content) + "00000011";
+                else
+                {
+                    binaryContents[i] = ConvertStringToBinaryString(content.Substring(0, sizeOfAChunk)) + "00000011";
+                    content = content.Remove(0, sizeOfAChunk);
+                }
+            }
+                                                       
             //To-do: apply compress algorithm here
-
+                
             fileReader.Close();
+        }
+
+        private static string ConvertStringToBinaryString(string iContent)
+        {
+            string lResult = ToBinary(ConvertToByteArray(iContent, Encoding.ASCII));
+            lResult = lResult.Replace(" ", "");
+            return lResult;
         }
 
         private static void inputReceiverInfo()
@@ -153,16 +199,16 @@ namespace SenderTCP
             reader.Close();
         }
         
-        static void sendEmptyPacket()
+        static void sendEmptyPacket(int index)
         {
-            byte[] data = new byte[1];            
-            networkStream.Write(data, 0, data.Length);
+            byte[] data = new byte[1];
+            networkStreams[index].Write(data, 0, data.Length);
         }
         
-        static void sendPacket(Object obj)
+        static void sendPacket(int index,Object obj)
         {
             byte[] data = objectToByteArray(obj);
-            networkStream.Write(data, 0, data.Length);
+            networkStreams[index].Write(data, 0, data.Length);
         }
 
         static byte[] objectToByteArray(Object obj)
