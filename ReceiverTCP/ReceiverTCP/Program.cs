@@ -1,257 +1,187 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 
 namespace ReceiverTCP
 {
     class Program
     {
         static string ip;
-        static int port;
+        static int startPort;
         static int delay;
-        static int runTimes;
+        static int numberOfRunTimes;
+        static int startIndex;
+        static int numberOfThreads;
+        static int compressAlgorithm;
 
-        static TcpListener tcpListener;
-        static TcpClient tcpClient;
-        static NetworkStream networkStream;
+        static string stringOriginalData;
 
-        static DateTime startTime;
-        static DateTime lastReceived;
-        static DateTime currentReceived;
+        static Exception ex = null;
 
-        static string receivedByte = "";
-
-        static string binaryContent = "";
-        static string stringContent = "";
-
-        static int numberOfACKs = 0;
-        static int numberOfNACKs = 0;
-
-        static int prefix = 0;
-
-        static String dataString;
-
-        private static void initValues()
-        {
-            startTime = DateTime.Now;
-            numberOfACKs = 0;
-            numberOfNACKs = 0;
-            receivedByte = "";
-            binaryContent = "";
-            stringContent = "";
-        }
 
         static void Main(string[] args)
         {
             inputHostInfo();
 
             StreamReader originalDataReader = new StreamReader("Data.txt");
-            dataString = originalDataReader.ReadToEnd();
+            stringOriginalData = originalDataReader.ReadToEnd();
             originalDataReader.Close();
 
-            while (prefix < runTimes)
+            while (startIndex < numberOfRunTimes)
             {
                 StreamWriter resultWriter = new StreamWriter("Result.txt", true);
-                resultWriter.WriteLine("---------- " + prefix + " ----------");
+                resultWriter.WriteLine("---------- " + startIndex + " ----------");
                 resultWriter.Close();
                 delay = 100;
-                receiveData(1);
-                //for (int i = 0; i < 4; ++i)
-                //{
-                //    receiveData(1);
-                //    delay += 100;
-                //}
-                ++prefix;
-            }
-        }
-
-        //stategy - 0:Pure 1:HasCRC
-        private static void receiveData(int strategy)
-        {
-            switch (strategy)
-            {
-                case 0:
-                    Console.WriteLine("Starting Pure - " + delay);
-                    applyPure();
-                    break;
-                case 1:
-                    Console.WriteLine("Starting CRC - " + delay);
-                    applyCRC();
-                    break;
-            }
-        }
-
-        private static void applyPure()
-        {
-            StreamWriter binaryWriter = new StreamWriter("Pure-Binary-" + delay + ".txt", false);
-            StreamWriter stringWriter = new StreamWriter("Pure-String-" + delay + ".txt", false);
-            StreamWriter infoWriter = new StreamWriter("Pure-Info-" + delay + ".txt", false);
-            try
-            {
-                inputHostInfo();
-                initConnection();
-
-                int numberOfReceivedBits = 0;
-                receivedByte = "";
-                stringContent = "";
-
-                receiveFirstEmptySignal();
-
-                while (true)
+                for (int i = 0; i < 4; ++i)
                 {
-                    receiveSignal();
-                    currentReceived = DateTime.Now;
-
-                    processNewBit();
-                    lastReceived = currentReceived;
-
-                    numberOfReceivedBits++;
-
-                    if (receivedByte.Length == 8)
+                    List<Receiver> receivers = new List<Receiver>();
+                    List<Thread> threads = new List<Thread>();
+                    try
                     {
-                        Console.WriteLine(receivedByte);
-                        binaryWriter.Write(receivedByte);
-
-                        if (numberOfReceivedBits == 8040)
+                        
+                        for (int j = 0; j < numberOfThreads; ++j)
                         {
-                            writeFinishMessage();
-                            infoWriter.WriteLine("Time: " + DateTime.Now.Subtract(startTime).TotalSeconds);
-                            break;
+                            Receiver receiver = new Receiver(ip, (startPort + j), delay, startIndex, compressAlgorithm != -1);
+                            Thread thread = new Thread(receiver.run);
+                            thread.Start();
+                            receivers.Add(receiver);
+                            threads.Add(thread);
                         }
 
-                        string decodedCharacter = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedByte));
-                        stringContent += decodedCharacter;
+                        for (int j = 0; j < threads.Count; ++j)
+                        {
+                            threads[j].Join();
+                        }
+                            
 
-                        stringWriter.Write(decodedCharacter);
-                        Console.WriteLine(stringContent);
-                        receiveFirstEmptySignal();
+                        writeFinishMessage(receivers);
+                        delay += 100;
                     }
-
-
+                    catch (Exception ex)
+                    {
+                        writeLineLogMessage(ex.ToString());
+                        for (int j = 0; j < threads.Count; ++j)
+                            threads[j].Abort();
+                        --i;
+                    }
                 }
-            }
-            finally
-            {
-                tcpListener.Stop();
-                tcpClient.Close();
-                networkStream.Close();
-
-                binaryWriter.Close();
-                stringWriter.Close();
-                infoWriter.Close();
+                ++startIndex;
             }
         }
-        
-        private static void applyCRC()
+
+        private static string decompressData(string compressedBinaryData)
         {
-            bool isFinised = false;
-            while(isFinised == false)
+            byte[] data = Receiver.convertStringBytesToBytes(compressedBinaryData);
+            return System.Text.Encoding.UTF8.GetString(decompress(data));
+        }
+
+        private static byte[] decompress(byte[] gzip)
+        {
+            // Create a GZIP stream with decompression mode.
+            // ... Then create a buffer and write into while reading from the GZIP stream.
+            using (GZipStream stream = new GZipStream(new MemoryStream(gzip), CompressionMode.Decompress))
             {
-                try
+                const int size = 4096;
+                byte[] buffer = new byte[size];
+                using (MemoryStream memory = new MemoryStream())
                 {
-                    initConnection();
-                    initValues();
-
-
-                    receiveFirstEmptySignal();
-                    while (true)
+                    int count = 0;
+                    do
                     {
-                        receiveSignal();
-                        currentReceived = DateTime.Now;
-
-                        processNewBit();
-                        lastReceived = currentReceived;
-
-                        if (receivedByte.Length == 16)
+                        count = stream.Read(buffer, 0, size);
+                        if (count > 0)
                         {
-                            Console.WriteLine(receivedByte);
-
-                            string receivedData = receivedByte.Substring(0, 8);
-                            string receivedCrc = receivedByte.Substring(8, 8);
-                            if (checkSum(receivedData, receivedCrc) == false || receivedData == "00000000")
-                            {
-                                sendResponse(false);
-                                //adjustNACKDelay();
-                                ++numberOfNACKs;
-                                Console.WriteLine("NACK: " + numberOfNACKs);
-                            }
-                            else
-                            {
-                                sendResponse(true);
-                                //adjustACKDelay();
-                                ++numberOfACKs;
-                                Console.WriteLine("ACK: " + numberOfACKs);
-                                binaryContent += receivedByte;
-
-                                if (receivedData == "00000011")
-                                {
-                                    tcpListener.Stop();
-                                    tcpClient.Close();
-                                    networkStream.Close();
-                                    
-                                    writeFinishMessage();
-                                    isFinised = true;
-                                    break;
-                                }
-
-                                string decodedCharacter = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedData));
-                                stringContent += decodedCharacter;
-                                Console.WriteLine(stringContent);
-                            }
-                            receiveFirstEmptySignal();
+                            memory.Write(buffer, 0, count);
                         }
                     }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.ToString());
-                    
-                    tcpListener.Stop();
-                    tcpClient.Close();
-                    networkStream.Close();
+                    while (count > 0);
+                    return memory.ToArray();
                 }
             }
         }
 
-        
-
-        private static void receiveFirstEmptySignal()
+        private static void writeLineLogMessage(string message)
         {
-            receivedByte = "";
-            receiveSignal();
-            lastReceived = DateTime.Now;
+            StreamWriter writer = new StreamWriter("Log_main.txt", true);
+            writer.WriteLine("{0}: {1}", DateTime.Now.ToString(), message);
+            writer.Close();
         }
 
-        private static void writeFinishMessage()
+        private static void writeFinishMessage(List<Receiver> receivers)
         {
             Console.WriteLine("Finished!");
-            Console.WriteLine(DateTime.Now.Subtract(startTime).Seconds);
 
 
-            StreamWriter binaryWriter = new StreamWriter("(" + prefix + ")-" + delay + "-Binary" + ".txt", false);
-            StreamWriter stringWriter = new StreamWriter("(" + prefix + ")-" + delay + "-String" + ".txt", false);
+            StreamWriter binaryWriter = new StreamWriter("(" + startIndex + ")-" + delay + "-Binary" + ".txt", false);
+            StreamWriter stringWriter = new StreamWriter("(" + startIndex + ")-" + delay + "-String" + ".txt", false);
             StreamWriter resultWriter = new StreamWriter("Result.txt", true);
 
-            binaryWriter.Write(binaryContent);
+            string binaryData = getBinaryData(receivers);
+            binaryWriter.Write(binaryData);
             binaryWriter.Close();
 
-            stringWriter.Write(stringContent);
+            string stringData = "";
+            if (compressAlgorithm == -1)
+                stringData = getStringData(receivers);
+            else if (compressAlgorithm == 0)
+                stringData = decompressData(binaryData);
+
+            stringWriter.Write(stringData);
             stringWriter.Close();
 
 
-            int countSimilar = CountSimilarBetweenTwoString(dataString, stringContent);
-            double percentage = (double)countSimilar / (double)dataString.Length * 100;
+            int countSimilar = CountSimilarBetweenTwoString(stringOriginalData, stringData);
+            double percentage = (double)countSimilar / (double)stringOriginalData.Length * 100;
+
+            int numberOfACKs = getNumberOfACKs(receivers);
+            int numberOfNACKs = getNumberOfNACKs(receivers);
 
             resultWriter.WriteLine("\tDelay " + delay);
             resultWriter.WriteLine("\t\tNumber of ACK: " + numberOfACKs);
             resultWriter.WriteLine("\t\tNumber of NACK: " + numberOfNACKs);
-            resultWriter.WriteLine("\t\tTime: " + DateTime.Now.Subtract(startTime).TotalSeconds);
+            resultWriter.WriteLine("\t\tTime: " + DateTime.Now.Subtract(receivers[0].StartTime).TotalSeconds);
             resultWriter.WriteLine("\t\tSimilar characters: " + countSimilar.ToString());
-            resultWriter.WriteLine("\t\tString length: " + dataString.Length);
+            resultWriter.WriteLine("\t\tString length: " + stringOriginalData.Length);
             resultWriter.WriteLine("\t\tPercentage: " + percentage.ToString("00.00"));
             resultWriter.Close();
+        }
+
+        private static int getNumberOfNACKs(List<Receiver> receivers)
+        {
+            int result = 0;
+            for (int i = 0; i < receivers.Count; ++i)
+                result += receivers[i].NumberOfNACKs;
+            return result;
+        }
+
+        private static int getNumberOfACKs(List<Receiver> receivers)
+        {
+            int result = 0;
+            for (int i = 0; i < receivers.Count; ++i)
+                result += receivers[i].NumberOfACKs;
+            return result;
+        }
+
+        private static string getStringData(List<Receiver> receivers)
+        {
+            string result = "";
+            for (int i = 0; i < receivers.Count; ++i)
+                result += receivers[i].StringData;
+            return result;
+        }
+
+        private static string getBinaryData(List<Receiver> receivers)
+        {
+            string result = "";
+            for (int i = 0; i < receivers.Count; ++i)
+                result += receivers[i].BinaryData;
+            return result;
         }
 
         private static int CountSimilarBetweenTwoString(string dataString, string resultString)
@@ -265,132 +195,17 @@ namespace ReceiverTCP
             return count;
         }
 
-        private static void sendResponse(bool isACK)
-        {
-            byte[] response = new byte[1];
-            if (isACK)
-                response[0] = 1;
-            else
-                response[0] = 0;
-            networkStream.Write(response, 0, response.Length);
-            
-        }
-
-
-        static int consecutiveCount = 0;
-        static bool isAckConsecutive = false;
-        static bool isNackConsecutive = false;
-        private static void adjustACKDelay()
-        {
-            isNackConsecutive = false;
-
-            if (isAckConsecutive == true)
-            {
-                consecutiveCount++;
-                if (consecutiveCount >= 5)
-                    delay -= 50;
-            }
-            else
-            {
-                isAckConsecutive = true;
-                consecutiveCount = 1;
-            }
-            writeDelayAdjustmentDetail();
-        }
-
-        private static void writeDelayAdjustmentDetail()
-        {
-            Console.WriteLine();
-            Console.WriteLine("Ack: " + isAckConsecutive);
-            Console.WriteLine("Nack: " + isNackConsecutive);
-            Console.WriteLine("Count: " + consecutiveCount);
-            Console.WriteLine("Delay: " + delay);
-        }
-
-
-        private static void adjustNACKDelay()
-        {
-            isAckConsecutive = false;
-            if (isNackConsecutive == true)
-            {
-                consecutiveCount++;
-                if (consecutiveCount == 5)
-                {
-                    delay *= 2;
-                    consecutiveCount = 0;
-                    isNackConsecutive = false;
-                }
-            }
-            else
-            {
-                isNackConsecutive = true;
-                consecutiveCount = 1;
-            }
-            writeDelayAdjustmentDetail();
-        }
-        private static void processNewBit()
-        {
-            if (currentReceived.Subtract(lastReceived).Milliseconds > delay)
-            {
-                //Console.WriteLine(currentReceived.Subtract(lastReceived).Milliseconds + "-1");
-                receivedByte += 1;
-            }
-            else 
-            {
-                //Console.WriteLine(currentReceived.Subtract(lastReceived).Milliseconds + "-0");
-                receivedByte += 0;
-            }
-        }
-
-        private static void initConnection()
-        {
-            tcpListener = new TcpListener(IPAddress.Parse(ip), port);
-            tcpListener.Start();
-
-            Console.WriteLine("Waiting for sender...");
-            tcpClient = tcpListener.AcceptTcpClient();
-
-            Console.WriteLine("Connected!");
-            networkStream = tcpClient.GetStream();
-        }
-
         private static void inputHostInfo()
         {
             StreamReader reader = new StreamReader("HostInfo.txt");
             ip = reader.ReadLine();
-            port = Int32.Parse(reader.ReadLine());
-            runTimes = Int32.Parse(reader.ReadLine());
-            prefix = Int32.Parse(reader.ReadLine());
+            startPort = Int32.Parse(reader.ReadLine());
+            numberOfRunTimes = Int32.Parse(reader.ReadLine());
+            startIndex = Int32.Parse(reader.ReadLine());
+            numberOfThreads = Int32.Parse(reader.ReadLine());
+            compressAlgorithm = Int32.Parse(reader.ReadLine());
+            reader.Close();
         }
 
-        static bool checkSum(string receivedData, string receivedCrc)
-        {
-            byte data = convertStringBytesToBytes(receivedData)[0];
-            byte crc = convertStringBytesToBytes(receivedCrc)[0];
-            byte check = Crc8.ComputeChecksum(data, crc);
-            if (check != 0)
-                return false;
-            return true;
-        }
-        static void receiveSignal()
-        {
-            byte[] data = new byte[1];
-            networkStream.ReadTimeout = 20000;
-            networkStream.Read(data, 0, 1);
-        }
-        static byte[] convertStringBytesToBytes(string input)
-        {
-            int numOfBytes = input.Length / 8;
-            byte[] bytes = new byte[numOfBytes];
-            for (int i = 0; i < numOfBytes; ++i)
-            {
-                bytes[i] = Convert.ToByte(input.Substring(8 * i, 8), 2);
-            }
-            return bytes;
-        }  
-        static byte[] convertStringToBytes(string input, Encoding encoding)
-        {
-            return encoding.GetBytes(input);
-        }
     }
 }
