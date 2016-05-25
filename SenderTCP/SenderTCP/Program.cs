@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net.Sockets;
 using System.Runtime.Serialization.Formatters.Binary;
@@ -96,36 +97,47 @@ namespace SenderTCP
 
             connectToReceiver(index);
 
-            while (i < binaryContents[index].Length)
+            while (i <= binaryContents[index].Length)
             {
-                if (checkNew)
+                if (i == binaryContents[index].Length)
+                    sendAPacket(index, 1);
+                else
                 {
-                    temp = "";
-                    byte u;
-                    for (int j = 0; j < 8; j++)
+                    if (checkNew)
                     {
-                        temp += binaryContents[index][i + j];
-                        string k = "" + binaryContents[index][i + j];
+                        temp = "";
+                        byte u;
+                        for (int j = 0; j < 8; j++)
+                        {
+                            temp += binaryContents[index][i + j];
+                            string k = "" + binaryContents[index][i + j];
+                        }
+                        if (temp != "00000000")
+                        {
+                            u = Convert.ToByte(temp, 2);
+                            byte crc = Crc8.ComputeChecksum(u);
+                            temp += Convert.ToString(crc, 2).PadLeft(8, '0');
+                        }
+
                     }
                     if (temp == "00000000")
                     {
-                        i += 8;
-                        continue;
+                        sendAPacket(index, 0);
                     }
-                    u = Convert.ToByte(temp, 2);
-                    byte crc = Crc8.ComputeChecksum(u);
-                    temp += Convert.ToString(crc, 2).PadLeft(8, '0');
-                }
-                sendEmptyPacket(index);
-                for (int j = 0; j < temp.Length; j++)
-                {
-                    if (temp[j] == '1')
+                    else
                     {
-                        Thread.Sleep(delay);
-                        sendEmptyPacket(index);
+                        sendAPacket(index, 2);
+                        for (int j = 0; j < temp.Length; j++)
+                        {
+                            if (temp[j] == '1')
+                            {
+                                Thread.Sleep(delay);
+                                sendAPacket(index, 2);
+                            }
+                            else if (temp[j] == '0')
+                                sendAPacket(index, 2);
+                        }
                     }
-                    else if (temp[j] == '0')
-                        sendEmptyPacket(index);
                 }
 
                 byte[] ACK = new byte[1];
@@ -163,19 +175,26 @@ namespace SenderTCP
         {
             StreamReader fileReader = new StreamReader("Data.txt");
             content = fileReader.ReadToEnd();
-            binaryContent = ConvertStringToBinaryString(content);
-            int sizeOfAChunk = (int)Math.Ceiling((double)content.Length / NUMBER_OF_PORT);
 
-            string[] contentChunks = new string[NUMBER_OF_PORT];
+            byte[] byteData = Encoding.ASCII.GetBytes(content);
+            byte[] compress = CompressUsingGzip(byteData);
+            List<byte> compressList = new List<byte>(compress);
+
+            content = ToBinary(compress).Replace(" ","");
+            string a = "";
+
+            int sizeOfAChunk = (int)Math.Ceiling((double)compress.Length / NUMBER_OF_PORT);
+            
             for (int i = 0; i < NUMBER_OF_PORT; i++)
             {
                 if (i == NUMBER_OF_PORT - 1)
-                    binaryContents[i] = ConvertStringToBinaryString(content) + "00000011";
+                    binaryContents[i] = ToBinary(compressList.ToArray()).Replace(" ","");// + "00000011";
                 else
                 {
-                    binaryContents[i] = ConvertStringToBinaryString(content.Substring(0, sizeOfAChunk)) + "00000011";
-                    content = content.Remove(0, sizeOfAChunk);
+                    binaryContents[i] = ToBinary(compressList.GetRange(0,sizeOfAChunk).ToArray()).Replace(" ","");// +"00000011";
+                    compressList.RemoveRange(0, sizeOfAChunk);
                 }
+                a += binaryContents[i];
             }
                                                        
             //To-do: apply compress algorithm here
@@ -199,10 +218,12 @@ namespace SenderTCP
             reader.Close();
         }
         
-        static void sendEmptyPacket(int index)
+        static void sendAPacket(int index, byte data)
         {
-            byte[] data = new byte[1];
-            networkStreams[index].Write(data, 0, data.Length);
+            if (data == 0 || data == 1)
+                Console.WriteLine("Port " + index + " send: " + data);
+            byte[] packet = new byte[1] {data};
+            networkStreams[index].Write(packet, 0, packet.Length);
         }
         
         static void sendPacket(int index,Object obj)
@@ -233,5 +254,17 @@ namespace SenderTCP
             return string.Join(" ", data.Select(byt => Convert.ToString(byt, 2).PadLeft(8, '0')).ToArray());
         }
 
+        public static byte[] CompressUsingGzip(byte[] raw)
+        {
+            using (MemoryStream memory = new MemoryStream())
+            {
+                using (GZipStream gzip = new GZipStream(memory,
+                CompressionLevel.Optimal, true))
+                {
+                    gzip.Write(raw, 0, raw.Length);
+                }
+                return memory.ToArray();
+            }
+        }
     }
 }
