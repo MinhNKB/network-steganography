@@ -29,56 +29,65 @@ namespace SenderTCP
         static string content;
         static string binaryContent;
       
-        const int DELAY_COUNT = 4;
+        const int DELAY_COUNT = 1;
 
-        const int NUMBER_OF_PORT = 10;
-        static string[] binaryContents = new string[NUMBER_OF_PORT];
-        static TcpClient[] tcpClients = new TcpClient[NUMBER_OF_PORT];
-        static NetworkStream[] networkStreams = new NetworkStream[NUMBER_OF_PORT];
+        static int[] ports = new int[6] {1, 60, 70, 80, 90, 100 };
+        
+        static int numberOfPort;
+        static string[] binaryContents;
+        static TcpClient[] tcpClients;
+        static NetworkStream[] networkStreams;
         static List<Thread> threads;
         static int delayCount = 0;
         static void Main(string[] args)
         {        
             Log.WriteLine("Loged");
             inputReceiverInfo();
-            prepareBinaryData();            
-            for (int i = 0; i < timesToRun; ++i)
+
+            for (int k = 0; k < ports.Length; k++)
             {
-                
-                try
+                numberOfPort = ports[k];
+                binaryContents = new string[numberOfPort];
+                tcpClients = new TcpClient[numberOfPort];
+                networkStreams = new NetworkStream[numberOfPort];
+                prepareBinaryData();
+                for (int i = 0; i < timesToRun; ++i)
                 {
-                    delayCount = i % DELAY_COUNT;
-                    countACK = 0;
-                    countNACK = 0;
-                    threads = new List<Thread>();
-                    Console.WriteLine("------------The " + i + "th run------------");
-                    Console.WriteLine("Run with delay: " + (delayCount * 200 + 200).ToString());
-                    for(int j=0;j<NUMBER_OF_PORT;j++)
+                    try
                     {
-                        Thread thread = new Thread(new ParameterizedThreadStart(Program.run));
-                        threads.Add(thread);
-                        thread.Start(j);                        
+                        delayCount = i % DELAY_COUNT;
+                        countACK = 0;
+                        countNACK = 0;
+                        threads = new List<Thread>();
+                        Console.WriteLine("------------The " + i + "th run------------");
+                        Console.WriteLine("Run with delay: " + (delayCount * 200 + 200).ToString());
+                        for (int j = 0; j < numberOfPort; j++)
+                        {
+                            Thread thread = new Thread(new ParameterizedThreadStart(Program.run));
+                            threads.Add(thread);
+                            thread.Start(j);
+                        }
+                        foreach (Thread thread in threads)
+                            thread.Join();
+                      
+                        threads.Clear();
+                        //if(i+1==timesToRun && delayCount+1<DELAY_COUNT)
+                        //{
+                        //    delayCount++;
+                        //    i = -1;
+                        //}
+
                     }
-                    foreach (Thread thread in threads)
-                        thread.Join();
-                    threads.Clear();
-                    //if(i+1==timesToRun && delayCount+1<DELAY_COUNT)
-                    //{
-                    //    delayCount++;
-                    //    i = -1;
-                    //}
-                    
-                }
-                catch(Exception ex)
-                {
-                    Console.WriteLine("Exception: " + ex.Message);
-                    foreach (Thread thread in threads)
-                        thread.Abort();
-                    threads.Clear();
-                    i--;
-                    Thread.Sleep(5000);
-                }
-                
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("Exception: " + ex.Message);
+                        foreach (Thread thread in threads)
+                            thread.Abort();
+                        threads.Clear();
+                        i--;
+                        Thread.Sleep(5000);
+                    }
+                }               
             }
             Log.Close();
             Console.ReadKey();
@@ -178,23 +187,19 @@ namespace SenderTCP
 
             byte[] byteData = Encoding.ASCII.GetBytes(content);
             byte[] compress = CompressUsingGzip(byteData);
-            List<byte> compressList = new List<byte>(compress);
+            List<byte> listOfData = new List<byte>(byteData);          
 
-            content = ToBinary(compress).Replace(" ","");
-            string a = "";
-
-            int sizeOfAChunk = (int)Math.Ceiling((double)compress.Length / NUMBER_OF_PORT);
+            int sizeOfAChunk = (int)Math.Ceiling((double)byteData.Length / numberOfPort);
             
-            for (int i = 0; i < NUMBER_OF_PORT; i++)
+            for (int i = 0; i < numberOfPort; i++)
             {
-                if (i == NUMBER_OF_PORT - 1)
-                    binaryContents[i] = ToBinary(compressList.ToArray()).Replace(" ","");// + "00000011";
+                if (i == numberOfPort - 1)
+                    binaryContents[i] = ToBinary(listOfData.ToArray()).Replace(" ","");// + "00000011";
                 else
                 {
-                    binaryContents[i] = ToBinary(compressList.GetRange(0,sizeOfAChunk).ToArray()).Replace(" ","");// +"00000011";
-                    compressList.RemoveRange(0, sizeOfAChunk);
-                }
-                a += binaryContents[i];
+                    binaryContents[i] = ToBinary(listOfData.GetRange(0,sizeOfAChunk).ToArray()).Replace(" ","");// +"00000011";
+                    listOfData.RemoveRange(0, sizeOfAChunk);
+                }             
             }
                                                        
             //To-do: apply compress algorithm here
