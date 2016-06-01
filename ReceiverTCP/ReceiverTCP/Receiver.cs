@@ -89,38 +89,42 @@ namespace ReceiverTCP
 
                     while (true)
                     {
-                        while (true)
+                        receiveFirstEmptySignal();
+                        //if (tcpPacket[0] == 0 && isCompressed == true)
+                        if (tcpPacket[0] == 0)
                         {
-                            receiveFirstEmptySignal();
-                            //if (tcpPacket[0] == 0 && isCompressed == true)
-                            if (tcpPacket[0] == 0)
-                            {
-                                sendResponse(true);
-                                //adjustACKDelay();
-                                ++numberOfACKs;
-                                writeLineLogMessage("Number of ACKs: " + numberOfACKs);
-                                Console.WriteLine("Port {0} number of ACKs: {1}", port, numberOfACKs);
-                                binaryData += "00000000";
-                                continue;
-                            }
-                            //else if (tcpPacket[0] == 1 && isCompressed == true)
-                            else if (tcpPacket[0] == 1)
-                            {
-                                sendResponse(true);
-                                //adjustACKDelay();
-                                ++numberOfACKs;
-                                writeLineLogMessage("Number of ACKs: " + numberOfACKs);
-                                Console.WriteLine("Port {0} number of ACKs: {1}", port, numberOfACKs);
-                                tcpListener.Stop();
-                                tcpClient.Close();
-                                networkStream.Close();
-                                isFinised = true;
-                                return;
-                            }
-                            else
-                                break;
+                            writeLineLogMessage("Received 00000000");
+                            sendResponse(true);
+                            //adjustACKDelay();
+                            ++numberOfACKs;
+                            writeLineLogMessage("Number of ACKs: " + numberOfACKs);
+                            Console.WriteLine("Port {0} number of ACKs: {1}", port, numberOfACKs);
+                            binaryData += "00000000";
+                            continue;
                         }
-
+                        //else if (tcpPacket[0] == 1 && isCompressed == true)
+                        else if (tcpPacket[0] == 1)
+                        {
+                            writeLineLogMessage("Received finish signal");
+                            sendResponse(true);
+                            //adjustACKDelay();
+                            ++numberOfACKs;
+                            writeLineLogMessage("Number of ACKs: " + numberOfACKs);
+                            Console.WriteLine("Port {0} number of ACKs: {1}", port, numberOfACKs);
+                            tcpListener.Stop();
+                            tcpClient.Close();
+                            networkStream.Close();
+                            isFinised = true;
+                            return;
+                        }
+                        else
+                        {
+                            writeLineLogMessage("Received first empty signal");
+                            break;
+                        }
+                    }
+                    while (true)
+                    {
                         receiveSignal();
                         currentReceived = DateTime.Now;
 
@@ -169,8 +173,44 @@ namespace ReceiverTCP
 
                                 string decodedCharacter = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedData));
                                 stringData += decodedCharacter;
-                                
+
                                 //Console.WriteLine(stringData);
+                            }
+                            while (true)
+                            {
+                                receiveFirstEmptySignal();
+                                //if (tcpPacket[0] == 0 && isCompressed == true)
+                                if (tcpPacket[0] == 0)
+                                {
+                                    writeLineLogMessage("Received 00000000");
+                                    sendResponse(true);
+                                    //adjustACKDelay();
+                                    ++numberOfACKs;
+                                    writeLineLogMessage("Number of ACKs: " + numberOfACKs);
+                                    Console.WriteLine("Port {0} number of ACKs: {1}", port, numberOfACKs);
+                                    binaryData += "00000000";
+                                    continue;
+                                }
+                                //else if (tcpPacket[0] == 1 && isCompressed == true)
+                                else if (tcpPacket[0] == 1)
+                                {
+                                    writeLineLogMessage("Received finish signal");
+                                    sendResponse(true);
+                                    //adjustACKDelay();
+                                    ++numberOfACKs;
+                                    writeLineLogMessage("Number of ACKs: " + numberOfACKs);
+                                    Console.WriteLine("Port {0} number of ACKs: {1}", port, numberOfACKs);
+                                    tcpListener.Stop();
+                                    tcpClient.Close();
+                                    networkStream.Close();
+                                    isFinised = true;
+                                    return;
+                                }
+                                else
+                                {
+                                    writeLineLogMessage("Received first empty signal");
+                                    break;
+                                }
                             }
                         }
                     }
