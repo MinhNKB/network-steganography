@@ -14,78 +14,90 @@ using System.Threading.Tasks;
 namespace SenderTCP
 {
     class Program
-    {
-        static TcpClient tcpClient;
-        static NetworkStream networkStream;
-
-       
+    {       
         static string IP;
         static int port;
+        static int[] listOfDelays;
+        static int delay;
         static int timesToRun;
+        static int[] arrayOfNumbersOfThreads;
+        static int numberOfThreads;
+        static bool useOnePort;
+        static bool useZip;
 
-        //static int delay;
-        static int countACK, countNACK;
-        
-        static string content;
-        static string binaryContent;
-      
-        const int DELAY_COUNT = 1;
-
-        static int[] ports = new int[6] {1, 60, 70, 80, 90, 100 };
-        
-        static int numberOfPort;
+        static string content;    
+        static int countACK, countNACK;                                      
         static string[] binaryContents;
+
         static TcpClient[] tcpClients;
         static NetworkStream[] networkStreams;
         static List<Thread> threads;
-        static int delayCount = 0;
+        
         static void Main(string[] args)
         {        
             Log.WriteLine("Loged");
             inputReceiverInfo();
 
-            for (int k = 0; k < ports.Length; k++)
+            for (int k = 0; k < arrayOfNumbersOfThreads.Length; k++)
             {
-                numberOfPort = ports[k];
-                binaryContents = new string[numberOfPort];
-                tcpClients = new TcpClient[numberOfPort];
-                networkStreams = new NetworkStream[numberOfPort];
+                numberOfThreads = arrayOfNumbersOfThreads[k];
+                binaryContents = new string[numberOfThreads];
+                if (!useOnePort)
+                {
+                    tcpClients = new TcpClient[numberOfThreads];
+                    networkStreams = new NetworkStream[numberOfThreads];
+                }
+                else
+                {
+                    tcpClients = new TcpClient[1];
+                    networkStreams = new NetworkStream[1];
+                }
+                
                 prepareBinaryData();
                 for (int i = 0; i < timesToRun; ++i)
                 {
                     try
                     {
-                        delayCount = i % DELAY_COUNT;
+                        delay = listOfDelays[i % listOfDelays.Length];
                         countACK = 0;
                         countNACK = 0;
                         threads = new List<Thread>();
                         Console.WriteLine("------------The " + i + "th run------------");
-                        Console.WriteLine("Run with delay: " + (delayCount * 200 + 200).ToString());
-                        for (int j = 0; j < numberOfPort; j++)
-                        {
+                        Console.WriteLine("Run with delay: " + delay.ToString());
+                        for (int j = 0; j < numberOfThreads; j++)
+                        {                            
                             Thread thread = new Thread(new ParameterizedThreadStart(Program.run));
                             threads.Add(thread);
-                            thread.Start(j);
+                            if (!useOnePort)
+                            {
+                                connectToReceiver(j);
+                                thread.Start(j);
+                            }
+                            else
+                            {
+                                if(j==0)
+                                    connectToReceiver(0);
+                                thread.Start(0);
+                            }
                         }
                         foreach (Thread thread in threads)
-                            thread.Join();
-                      
-                        threads.Clear();
-                        //if(i+1==timesToRun && delayCount+1<DELAY_COUNT)
-                        //{
-                        //    delayCount++;
-                        //    i = -1;
-                        //}
-
+                            thread.Join();                                                         
                     }
                     catch (Exception ex)
                     {
                         Console.WriteLine("Exception: " + ex.Message);
-                        foreach (Thread thread in threads)
+                        foreach (Thread thread in threads)                            
                             thread.Abort();
-                        threads.Clear();
                         i--;
                         Thread.Sleep(5000);
+                    }
+                    finally
+                    {                        
+                        threads.Clear();
+                        foreach (TcpClient tcpClient in tcpClients)
+                            tcpClient.Close();
+                        foreach (NetworkStream networkStream in networkStreams)
+                            networkStream.Close();       
                     }
                 }               
             }
@@ -96,15 +108,10 @@ namespace SenderTCP
         private static void run(object obj)
         {
             int index = (int)obj;
-
-            int delay = delayCount * 200 + 200;                        
-            Thread.Sleep(1000);
-
+                                               
             int i = 0;
             string temp = "";
-            bool checkNew = true;
-
-            connectToReceiver(index);
+            bool checkNew = true;           
 
             while (i <= binaryContents[index].Length)
             {
@@ -148,9 +155,10 @@ namespace SenderTCP
                         }
                     }
                 }
-
+                Console.WriteLine(index + "Waiting for ack");
                 byte[] ACK = new byte[1];
                 networkStreams[index].Read(ACK, 0, 1);
+                Console.WriteLine(index + "acked");
                 if (ACK[0] == 1)
                 {
                     i += 8;
@@ -166,10 +174,7 @@ namespace SenderTCP
                 }
 
             }
-            Console.WriteLine(index + " finished!");
-            tcpClients[index].Close();
-            networkStreams[index].Close();
-                     
+            Console.WriteLine(index + " finished!");                                
         }
 
         private static void connectToReceiver(int index)
@@ -186,20 +191,34 @@ namespace SenderTCP
             content = fileReader.ReadToEnd();
 
             byte[] byteData = Encoding.ASCII.GetBytes(content);
-            byte[] compress = CompressUsingGzip(byteData);
+            if(useZip)
+                byteData = CompressUsingGzip(byteData);
             List<byte> listOfData = new List<byte>(byteData);          
 
-            int sizeOfAChunk = (int)Math.Ceiling((double)byteData.Length / numberOfPort);
+            int sizeOfAChunk = (int)Math.Ceiling((double)byteData.Length / numberOfThreads);
             
-            for (int i = 0; i < numberOfPort; i++)
+            for (int i = 0; i < numberOfThreads; i++)
             {
-                if (i == numberOfPort - 1)
-                    binaryContents[i] = ToBinary(listOfData.ToArray()).Replace(" ","");// + "00000011";
-                else
+                if (listOfData.Count > 0)
                 {
-                    binaryContents[i] = ToBinary(listOfData.GetRange(0,sizeOfAChunk).ToArray()).Replace(" ","");// +"00000011";
-                    listOfData.RemoveRange(0, sizeOfAChunk);
-                }             
+                    if (i == numberOfThreads - 1)
+                        binaryContents[i] = ToBinary(listOfData.ToArray()).Replace(" ", "");
+                    else
+                    {
+                        if (sizeOfAChunk < listOfData.Count)
+                        {
+                            binaryContents[i] = ToBinary(listOfData.GetRange(0, sizeOfAChunk).ToArray()).Replace(" ", "");
+                            listOfData.RemoveRange(0, sizeOfAChunk);
+                        }
+                        else
+                        {
+                            binaryContents[i] = ToBinary(listOfData.ToArray()).Replace(" ", "");
+                            listOfData.Clear();
+                        }
+                    }
+                }
+                else
+                    binaryContents[i] = "";
             }
                                                        
             //To-do: apply compress algorithm here
@@ -217,9 +236,35 @@ namespace SenderTCP
         private static void inputReceiverInfo()
         {
             StreamReader reader = new StreamReader("ReceiverInfo.txt");
-            IP = reader.ReadLine();
-            port = Int32.Parse(reader.ReadLine());
-            timesToRun = Int32.Parse(reader.ReadLine());
+            string line;
+            line = reader.ReadLine();
+            IP = line.Remove(0, line.IndexOf(' ') + 1);
+            line = reader.ReadLine();
+            port = Int32.Parse(line.Remove(0, line.IndexOf(' ') + 1));
+
+            line = reader.ReadLine();
+            string[] delayString = line.Remove(0, line.IndexOf(' ') + 1).Split(' ');            
+            listOfDelays = new int[delayString.Length];
+            for (int i = 0; i < delayString.Length; i++)
+            {
+                listOfDelays[i] = Int32.Parse(delayString[i]);
+            }
+
+            line = reader.ReadLine();
+            timesToRun = Int32.Parse(line.Remove(0, line.IndexOf(' ') + 1)) * listOfDelays.Length;
+
+            line = reader.ReadLine();
+            string[] numberOfPortString = line.Remove(0, line.IndexOf(' ') + 1).Split(' ');
+            arrayOfNumbersOfThreads = new int[numberOfPortString.Length];
+            for (int i = 0; i < numberOfPortString.Length;i++ )
+            {
+                arrayOfNumbersOfThreads[i] = Int32.Parse(numberOfPortString[i]);
+            }
+
+            line = reader.ReadLine();
+            useOnePort = line.Remove(0, line.IndexOf(' ') + 1) == "true" ? true : false;
+            line = reader.ReadLine();
+            useZip = line.Remove(0, line.IndexOf(' ') + 1) == "true" ? true : false;
             reader.Close();
         }
         
