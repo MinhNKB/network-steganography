@@ -32,7 +32,7 @@ namespace SenderTCP
         static TcpClient[] tcpClients;
         static NetworkStream[] networkStreams;
         static List<Thread> threads;
-        
+        static byte[] checkAck;
         static void Main(string[] args)
         {        
             Log.WriteLine("Loged");
@@ -41,6 +41,7 @@ namespace SenderTCP
             for (int k = 0; k < arrayOfNumbersOfThreads.Length; k++)
             {
                 numberOfThreads = arrayOfNumbersOfThreads[k];
+                checkAck = new byte[numberOfThreads];
                 binaryContents = new string[numberOfThreads];
                 if (!useOnePort)
                 {
@@ -70,15 +71,14 @@ namespace SenderTCP
                             threads.Add(thread);
                             if (!useOnePort)
                             {
-                                connectToReceiver(j);
-                                thread.Start(j);
+                                connectToReceiver(j);                                
                             }
                             else
                             {
                                 if(j==0)
-                                    connectToReceiver(0);
-                                thread.Start(0);
+                                    connectToReceiver(0);                                
                             }
+                            thread.Start(j);
                         }
                         foreach (Thread thread in threads)
                             thread.Join();                                                         
@@ -97,7 +97,8 @@ namespace SenderTCP
                         foreach (TcpClient tcpClient in tcpClients)
                             tcpClient.Close();
                         foreach (NetworkStream networkStream in networkStreams)
-                            networkStream.Close();       
+                            networkStream.Close();
+                        Thread.Sleep(5000);
                     }
                 }               
             }
@@ -115,6 +116,8 @@ namespace SenderTCP
 
             while (i <= binaryContents[index].Length)
             {
+                Console.WriteLine(index + " current: " + i);
+                checkAck[index] = 2; //reset
                 if (i == binaryContents[index].Length)
                     sendAPacket(index, 1);
                 else
@@ -155,11 +158,9 @@ namespace SenderTCP
                         }
                     }
                 }
-                Console.WriteLine(index + "Waiting for ack");
-                byte[] ACK = new byte[1];
-                networkStreams[index].Read(ACK, 0, 1);
-                Console.WriteLine(index + "acked");
-                if (ACK[0] == 1)
+                //Console.WriteLine(index + "Waiting for signal");
+                bool check = CheckForAck(index);                
+                if (check)
                 {
                     i += 8;
                     checkNew = true;
@@ -177,17 +178,42 @@ namespace SenderTCP
             Console.WriteLine(index + " finished!");                                
         }
 
-        private static void connectToReceiver(int index)
+        private static bool CheckForAck(int index)
         {
+            if (!useOnePort)
+            {
+                byte[] ACK = new byte[1];
+                networkStreams[index].Read(ACK, 0, 1);
+                Console.WriteLine(index + " receive: " + ACK[0]);
+                checkAck[index] = ACK[0];
+            }
+            else
+            {
+                byte[] ACK = new byte[2];
+                networkStreams[0].Read(ACK, 0, 2);
+                Console.WriteLine(ACK[0] + " receive: " + ACK[1]);
+                checkAck[ACK[0]] = ACK[1];
+            }
+            while(checkAck[index]==2)
+            {
+                
+            }
+            if (checkAck[index] == 1)
+                return true;
+            else
+                return false;
+        }
+
+        private static void connectToReceiver(int index)
+        {            
             tcpClients[index] = new TcpClient(IP, port + index);
-            Console.WriteLine("Port: " + (port + index));
-            tcpClients[index].NoDelay = true;
+            Console.WriteLine("Port: " + (port + index));            
             networkStreams[index] = tcpClients[index].GetStream();
         }
 
         private static void prepareBinaryData()
         {
-            StreamReader fileReader = new StreamReader("Data.txt");
+            StreamReader fileReader = new StreamReader("Data1.txt");
             content = fileReader.ReadToEnd();
 
             byte[] byteData = Encoding.ASCII.GetBytes(content);
@@ -195,20 +221,26 @@ namespace SenderTCP
                 byteData = CompressUsingGzip(byteData);
             List<byte> listOfData = new List<byte>(byteData);          
 
-            int sizeOfAChunk = (int)Math.Ceiling((double)byteData.Length / numberOfThreads);
-            
+            //int sizeOfAChunk = (int)Math.Ceiling((double)byteData.Length / numberOfThreads);
+            int mimimumSizeOfAChunk = byteData.Length / numberOfThreads;
+            int countChunkHaveMoreData = byteData.Length % numberOfThreads;
+            int actualSize;
             for (int i = 0; i < numberOfThreads; i++)
             {
+                if (i < countChunkHaveMoreData)
+                    actualSize = mimimumSizeOfAChunk + 1;
+                else
+                    actualSize = mimimumSizeOfAChunk;
                 if (listOfData.Count > 0)
                 {
                     if (i == numberOfThreads - 1)
                         binaryContents[i] = ToBinary(listOfData.ToArray()).Replace(" ", "");
                     else
                     {
-                        if (sizeOfAChunk < listOfData.Count)
+                        if (actualSize < listOfData.Count)
                         {
-                            binaryContents[i] = ToBinary(listOfData.GetRange(0, sizeOfAChunk).ToArray()).Replace(" ", "");
-                            listOfData.RemoveRange(0, sizeOfAChunk);
+                            binaryContents[i] = ToBinary(listOfData.GetRange(0, actualSize).ToArray()).Replace(" ", "");
+                            listOfData.RemoveRange(0, actualSize);
                         }
                         else
                         {
@@ -219,9 +251,7 @@ namespace SenderTCP
                 }
                 else
                     binaryContents[i] = "";
-            }
-                                                       
-            //To-do: apply compress algorithm here
+            }                                                                  
                 
             fileReader.Close();
         }
@@ -269,11 +299,17 @@ namespace SenderTCP
         }
         
         static void sendAPacket(int index, byte data)
-        {
-            if (data == 0 || data == 1)
-                Console.WriteLine("Port " + index + " send: " + data);
-            byte[] packet = new byte[1] {data};
-            networkStreams[index].Write(packet, 0, packet.Length);
+        {            
+            if (!useOnePort)
+            {
+                byte[] packet = new byte[1] { data };
+                networkStreams[index].Write(packet, 0, packet.Length);
+            }
+            else
+            {
+                byte[] packet = new byte[2] { (byte)index, data };
+                networkStreams[0].Write(packet, 0, packet.Length);
+            }
         }
         
         static void sendPacket(int index,Object obj)
