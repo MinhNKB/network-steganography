@@ -12,20 +12,20 @@ namespace ReceiverTCP
     class Program
     {
         static string ip;
-        static int startPort;
+        static int port;
         static int delay;
         static int numberOfRunTimes;
         static int startIndex;
-        static int numberOfThreads;
         static int compressAlgorithm;
 
         static string stringOriginalData;
 
-        static Exception ex = null;
+        static TcpListener tcpListener;
+        static TcpClient tcpClient;
+        static NetworkStream networkStream;
+        static readonly Object networkStreamLock = new Object();
 
-        static int[] numberOfPortsArray = new int[3] { 100, 150, 200 };
-
-        static int currentNumberOfPortsIndex = 0;
+        static int[] numberOfThreadsArray = new int[20] {10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200};
 
         static void Main(string[] args)
         {
@@ -35,55 +35,86 @@ namespace ReceiverTCP
             stringOriginalData = originalDataReader.ReadToEnd();
             originalDataReader.Close();
 
-            for (currentNumberOfPortsIndex = 0; currentNumberOfPortsIndex < numberOfPortsArray.Length; ++currentNumberOfPortsIndex)
+            for (int i = 0; i < numberOfThreadsArray.Length; ++i)
             {
-                numberOfThreads = numberOfPortsArray[currentNumberOfPortsIndex];
-
-                int count = startIndex;
-                while (count < numberOfRunTimes)
+                for (int j = 0; j < numberOfRunTimes; ++j)
                 {
                     StreamWriter resultWriter = new StreamWriter("Result.txt", true);
-                    resultWriter.WriteLine("---------- Number of ports used: {0}, Index: {1} ----------", numberOfThreads, count);
+                    resultWriter.WriteLine("---------- Number of threads used: {0}, Index: {1} ----------", numberOfThreadsArray[i], j);
+                        
                     resultWriter.Close();
-                    delay = 100;
-                    for (int i = 0; i < 1; ++i)
+                    try
                     {
+
+                        initConnection();
+
                         List<Receiver> receivers = new List<Receiver>();
-                        List<Thread> threads = new List<Thread>();
+                        int numberOfFinishSignals = 0;
+
+                        for (int k = 0; k < numberOfThreadsArray[i]; ++k)
+                        {
+                            Receiver receiver = new Receiver(delay, j, k, networkStream, networkStreamLock);
+                            receivers.Add(receiver);
+                        }
+
+                        while (numberOfFinishSignals < numberOfThreadsArray[i])
+                        {
+                            byte[] receivedPacket = receivePacket();
+                            int index = Convert.ToInt32(receivedPacket[0]);
+                            //Thread thread = new Thread(() => receivers[index].processNewPacket(receivedPacket, DateTime.Now));
+                            //thread.Start();
+                            receivers[index].processNewPacket(receivedPacket, DateTime.Now);
+                            if (receivedPacket[1] == 1)
+                                ++numberOfFinishSignals;
+                        }
+                        //Thread.Sleep(5000);
+                        tcpListener.Stop();
+                        tcpClient.Close();
+                        networkStream.Close();
+                        writeFinishMessage(receivers, j, numberOfThreadsArray[i]);
+                    }
+                    catch (Exception ex)
+                    {
                         try
                         {
-
-                            for (int j = 0; j < numberOfThreads; ++j)
-                            {
-                                Receiver receiver = new Receiver(ip, (startPort + j), delay, count, compressAlgorithm != -1);
-                                Thread thread = new Thread(receiver.run);
-                                thread.Start();
-                                receivers.Add(receiver);
-                                threads.Add(thread);
-                            }
-
-                            for (int j = 0; j < threads.Count; ++j)
-                            {
-                                threads[j].Join();
-                            }
-
-
-                            writeFinishMessage(receivers, count);
-                            delay += 100;
-                        }
-                        catch (Exception ex)
-                        {
+                            --j;
+                            Console.WriteLine("Main: {0}", ex.ToString());
                             writeLineLogMessage(ex.ToString());
-                            for (int j = 0; j < threads.Count; ++j)
-                                threads[j].Abort();
-                            --i;
+                            tcpListener.Stop();
+                            tcpClient.Close();
+                            networkStream.Close();
                         }
+                        catch (Exception) { }
+                        //throw new Exception("Port " + port + ": " + ex.ToString());
                     }
-                    ++count;
                 }
             }
-                
         }
+
+        private static byte[] receivePacket()
+        {
+            lock (networkStreamLock)
+            {
+                byte[] tcpPacket = new byte[2];
+                networkStream.Read(tcpPacket, 0, tcpPacket.Length);
+                return tcpPacket;
+            }
+        }
+
+        private static void initConnection()
+        {
+            tcpListener = new TcpListener(IPAddress.Parse(ip), port);
+            tcpListener.Start();
+
+            Console.WriteLine("Waiting for sender...");
+            writeLineLogMessage("Waiting for sender...");
+            tcpClient = tcpListener.AcceptTcpClient();
+
+            Console.WriteLine("Connected!");
+            writeLineLogMessage("Connected!");
+            networkStream = tcpClient.GetStream();
+        }
+
 
         private static string decompressData(string compressedBinaryData)
         {
@@ -123,13 +154,13 @@ namespace ReceiverTCP
             writer.Close();
         }
 
-        private static void writeFinishMessage(List<Receiver> receivers, int count)
+        private static void writeFinishMessage(List<Receiver> receivers, int runTimesIndex, int numberOfThreads)
         {
             Console.WriteLine("Finished!");
 
 
-            StreamWriter binaryWriter = new StreamWriter("(" + count + ")-(Ports_" + numberOfThreads + ")-" + delay + "-Binary" + ".txt", false);
-            StreamWriter stringWriter = new StreamWriter("(" + count + ")-(Ports_" + numberOfThreads + ")-" + delay + "-String" + ".txt", false);
+            StreamWriter binaryWriter = new StreamWriter("(" + runTimesIndex + ")-(Threads_" + numberOfThreads + ")-" + delay + "-Binary" + ".txt", false);
+            StreamWriter stringWriter = new StreamWriter("(" + runTimesIndex + ")-(Threads_" + numberOfThreads + ")-" + delay + "-String" + ".txt", false);
             StreamWriter resultWriter = new StreamWriter("Result.txt", true);
 
             string binaryData = getBinaryData(receivers);
@@ -207,14 +238,14 @@ namespace ReceiverTCP
 
         private static void inputHostInfo()
         {
-            StreamReader reader = new StreamReader("HostInfo.txt");
-            ip = reader.ReadLine();
-            startPort = Int32.Parse(reader.ReadLine());
-            numberOfRunTimes = Int32.Parse(reader.ReadLine());
-            startIndex = Int32.Parse(reader.ReadLine());
-            numberOfThreads = Int32.Parse(reader.ReadLine());
-            compressAlgorithm = Int32.Parse(reader.ReadLine());
-            reader.Close();
+            //StreamReader reader = new StreamReader("HostInfo.txt");
+            ip = "192.168.1.200";
+            port = 4040;
+            delay = 100;
+            numberOfRunTimes = 50;
+            startIndex = 0;
+            compressAlgorithm = -1;
+            //reader.Close();
         }
 
     }

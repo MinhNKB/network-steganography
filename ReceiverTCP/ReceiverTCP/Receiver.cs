@@ -11,15 +11,12 @@ namespace ReceiverTCP
 {
     class Receiver
     {
-        private string ip;
-        private int port;
         private int delay;
-        private int index;
-        private bool isCompressed;
-
-        private TcpListener tcpListener;
-        private TcpClient tcpClient;
+        private int runTimesIndex;
+        private int threadIndex;
+        
         private NetworkStream networkStream;
+        private Object networkStreamLock;
 
         private int numberOfACKs = 0;
 
@@ -64,199 +61,129 @@ namespace ReceiverTCP
             set { stringData = value; }
         }
 
-        public Receiver(string ip, int port, int delay, int index, bool isComressed)
+        public Receiver(int delay, int runTimesIndex, int threadIndex, NetworkStream networkStream, Object networkStreamLock)
         {
-            this.ip = ip;
-            this.port = port;
             this.delay = delay;
-            this.index = index;
-            this.isCompressed = isComressed;
+            this.runTimesIndex = runTimesIndex;
+            this.threadIndex = threadIndex;
+            this.networkStream = networkStream;
+            this.networkStreamLock = networkStreamLock;
+            initValues();
         }
 
         private string tmpReceivedByte = "";
 
-        private byte[] tcpPacket;
+        private bool isStarted = false;
 
-        public void run()
+        public void processNewPacket(byte[] receivedPacket, DateTime receiveTime)
         {
-            bool isFinised = false;
-            while (isFinised == false)
+            try
             {
-                try
+                if (isStarted == false)
                 {
-                    initConnection();
-                    initValues();
-
-                    while (true)
-                    {
-                        receiveFirstEmptySignal();
-                        //if (tcpPacket[0] == 0 && isCompressed == true)
-                        if (tcpPacket[0] == 0)
-                        {
-                            writeLineLogMessage("Received 00000000");
-                            sendResponse(true);
-                            //adjustACKDelay();
-                            ++numberOfACKs;
-                            writeLineLogMessage("Number of ACKs: " + numberOfACKs);
-                            Console.WriteLine("Port {0} number of ACKs: {1}", port, numberOfACKs);
-                            binaryData += "00000000";
-                            continue;
-                        }
-                        //else if (tcpPacket[0] == 1 && isCompressed == true)
-                        else if (tcpPacket[0] == 1)
-                        {
-                            writeLineLogMessage("Received finish signal");
-                            sendResponse(true);
-                            //adjustACKDelay();
-                            ++numberOfACKs;
-                            writeLineLogMessage("Number of ACKs: " + numberOfACKs);
-                            Console.WriteLine("Port {0} number of ACKs: {1}", port, numberOfACKs);
-                            tcpListener.Stop();
-                            tcpClient.Close();
-                            networkStream.Close();
-                            isFinised = true;
-                            return;
-                        }
-                        else
-                        {
-                            writeLineLogMessage("Received first empty signal");
-                            break;
-                        }
-                    }
-                    while (true)
-                    {
-                        receiveSignal();
-                        currentReceived = DateTime.Now;
-
-                        processNewBit();
-                        lastReceived = currentReceived;
-
-                        if (tmpReceivedByte.Length == 16)
-                        {
-                            Console.WriteLine(tmpReceivedByte);
-                            writeLineLogMessage(tmpReceivedByte);
-
-                            string receivedData = tmpReceivedByte.Substring(0, 8);
-                            string receivedCrc = tmpReceivedByte.Substring(8, 8);
-
-                            if (checkSum(receivedData, receivedCrc) == false || receivedData == "00000000")
-                            {
-                                sendResponse(false);
-                                //adjustNACKDelay();
-                                ++numberOfNACKs;
-                                writeLineLogMessage("Number of NACKs: " + numberOfNACKs);
-                                Console.WriteLine("Port {0} number of NACKs: {1}", port, numberOfNACKs);
-                            }
-                            else
-                            {
-                                sendResponse(true);
-                                //adjustACKDelay();
-                                ++numberOfACKs;
-                                writeLineLogMessage("Number of ACKs: " + numberOfACKs);
-                                Console.WriteLine("Port {0} number of ACKs: {1}", port, numberOfACKs);
-
-                                //if (receivedData == "00000011" && isCompressed == false)
-                                //{
-                                //    tcpListener.Stop();
-                                //    tcpClient.Close();
-                                //    networkStream.Close();
-                                //    isFinised = true;
-                                //    break;
-                                //}
-
-                                binaryData += receivedData;
-                                //if (isCompressed == false)
-                                //{
-                                //    string decodedCharacter = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedData));
-                                //    stringData += decodedCharacter;
-                                //}
-
-                                string decodedCharacter = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedData));
-                                stringData += decodedCharacter;
-
-                                //Console.WriteLine(stringData);
-                            }
-                            while (true)
-                            {
-                                receiveFirstEmptySignal();
-                                //if (tcpPacket[0] == 0 && isCompressed == true)
-                                if (tcpPacket[0] == 0)
-                                {
-                                    writeLineLogMessage("Received 00000000");
-                                    sendResponse(true);
-                                    //adjustACKDelay();
-                                    ++numberOfACKs;
-                                    writeLineLogMessage("Number of ACKs: " + numberOfACKs);
-                                    Console.WriteLine("Port {0} number of ACKs: {1}", port, numberOfACKs);
-                                    binaryData += "00000000";
-                                    continue;
-                                }
-                                //else if (tcpPacket[0] == 1 && isCompressed == true)
-                                else if (tcpPacket[0] == 1)
-                                {
-                                    writeLineLogMessage("Received finish signal");
-                                    sendResponse(true);
-                                    //adjustACKDelay();
-                                    ++numberOfACKs;
-                                    writeLineLogMessage("Number of ACKs: " + numberOfACKs);
-                                    Console.WriteLine("Port {0} number of ACKs: {1}", port, numberOfACKs);
-                                    tcpListener.Stop();
-                                    tcpClient.Close();
-                                    networkStream.Close();
-                                    isFinised = true;
-                                    return;
-                                }
-                                else
-                                {
-                                    writeLineLogMessage("Received first empty signal");
-                                    break;
-                                }
-                            }
-                        }
-                    }
+                    startTime = DateTime.Now;
+                    isStarted = true;
                 }
-                catch (Exception ex)
+
+                if (receivedPacket[1] == 0)
                 {
-                    Console.WriteLine("Port {0}: {1}", port, ex.ToString());
-                    writeLineLogMessage(ex.ToString());
-                    try
-                    {
-                        tcpListener.Stop();
-                    }
-                    catch (Exception) { }
-                    //throw new Exception("Port " + port + ": " + ex.ToString());
+                    writeLineLogMessage("Received 00000000");
+                    sendResponse(true);
+                    //adjustACKDelay();
+                    ++numberOfACKs;
+                    writeLineLogMessage("Number of ACKs: " + numberOfACKs);
+                    Console.WriteLine("Thread {0} number of ACKs: {1}", threadIndex, numberOfACKs);
+                    binaryData += "00000000";
+                    return;
                 }
+
+                if (receivedPacket[1] == 1)
+                {
+                    writeLineLogMessage("Received finish signal");
+                    sendResponse(true);
+                    //adjustACKDelay();
+                    ++numberOfACKs;
+                    writeLineLogMessage("Number of ACKs: " + numberOfACKs);
+                    Console.WriteLine("Thread {0} number of ACKs: {1}", threadIndex, numberOfACKs);
+                    return;
+                }
+
+                if (tmpReceivedByte == "empty")
+                {
+                    lastReceived = DateTime.Now;
+                    tmpReceivedByte = "";
+                    return;
+                }
+
+                currentReceived = DateTime.Now;
+                processNewBit();
+                lastReceived = currentReceived;
+
+                if (tmpReceivedByte.Length == 16)
+                {
+                    Console.WriteLine(tmpReceivedByte);
+                    writeLineLogMessage(tmpReceivedByte);
+
+                    string receivedData = tmpReceivedByte.Substring(0, 8);
+                    string receivedCrc = tmpReceivedByte.Substring(8, 8);
+
+                    if (checkSum(receivedData, receivedCrc) == false || receivedData == "00000000")
+                    {
+                        writeLineLogMessage("NACK");
+                        sendResponse(false);
+                        //adjustNACKDelay();
+                        ++numberOfNACKs;
+                        writeLineLogMessage("Number of NACKs: " + numberOfNACKs);
+                        Console.WriteLine("Thread {0}: number of NACKs: {1}", threadIndex, numberOfNACKs);
+                    }
+                    else
+                    {
+                        writeLineLogMessage("ACK");
+                        sendResponse(true);
+                        //adjustACKDelay();
+                        ++numberOfACKs;
+                        writeLineLogMessage("Number of ACKs: " + numberOfACKs);
+                        Console.WriteLine("Thread {0}: number of ACKs: {1}", threadIndex, numberOfACKs);
+
+                        binaryData += receivedData;
+
+                        string decodedCharacter = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedData));
+                        stringData += decodedCharacter;
+                        writeLineLogMessage(stringData);
+                    }
+                    tmpReceivedByte = "empty";
+                }
+            }
+            catch (Exception ex)
+            {
+                writeLineLogMessage(ex.Message);
+                Console.WriteLine("Thread {0}: ", ex.Message);
             }
         }
 
         private void initValues()
         {
-            startTime = DateTime.Now;
             numberOfACKs = 0;
             numberOfNACKs = 0;
-            tmpReceivedByte = "";
+            tmpReceivedByte = "empty";
             binaryData = "";
             stringData = "";
         }
 
-        private void receiveFirstEmptySignal()
-        {
-            tmpReceivedByte = "";
-            receiveSignal();
-            lastReceived = DateTime.Now;
-        }
-
-        
-
         private void sendResponse(bool isACK)
         {
-            byte[] response = new byte[1];
-            if (isACK)
-                response[0] = 1;
-            else
-                response[0] = 0;
-            networkStream.Write(response, 0, response.Length);
-
+            //lock (networkStreamLock)
+            {
+                byte[] response = new byte[2];
+                response[0] = Convert.ToByte(threadIndex);
+                if (isACK)
+                    response[1] = 1;
+                else
+                    response[1] = 0;
+                networkStream.Write(response, 0, response.Length);
+                writeLineLogMessage("Response sent!");
+            }
+            
         }
 
         private void processNewBit()
@@ -273,21 +200,6 @@ namespace ReceiverTCP
             }
         }
 
-        private void initConnection()
-        {
-            tcpListener = new TcpListener(IPAddress.Parse(ip), port);
-            tcpListener.Start();
-
-            Console.WriteLine("Waiting for sender on port {0}...", port);
-            writeLineLogMessage("Waiting for sender...");
-            tcpClient = tcpListener.AcceptTcpClient();
-
-            Console.WriteLine("Port {0} connected!", port);
-            writeLineLogMessage("Connected!");
-            networkStream = tcpClient.GetStream();
-        }
-
-
 
         private bool checkSum(string receivedData, string receivedCrc)
         {
@@ -297,14 +209,6 @@ namespace ReceiverTCP
             if (check != 0)
                 return false;
             return true;
-        }
-
-
-        private void receiveSignal()
-        {
-            tcpPacket = new byte[1];
-            networkStream.ReadTimeout = 20000;
-            networkStream.Read(tcpPacket, 0, 1);
         }
 
         public static byte[] convertStringBytesToBytes(string input)
@@ -325,15 +229,15 @@ namespace ReceiverTCP
 
         private void writeLogMessage(string message)
         {
-            StreamWriter writer = new StreamWriter("Log_{0}.txt", true);
-            writer.Write("({0}) {1}: {2}", index, DateTime.Now.ToString(), message);
+            StreamWriter writer = new StreamWriter("Log_" + threadIndex + ".txt", true);
+            writer.Write("({0}) {1}: {2}", runTimesIndex, DateTime.Now.ToString(), message);
             writer.Close();
         }
 
         private void writeLineLogMessage(string message)
         {
-            StreamWriter writer = new StreamWriter("Log_" + port + ".txt", true);
-            writer.WriteLine("({0}) {1}: {2}", index, DateTime.Now.ToString(), message);
+            StreamWriter writer = new StreamWriter("Log_" + threadIndex + ".txt", true);
+            writer.WriteLine("({0}) {1}: {2}", runTimesIndex, DateTime.Now.ToString(), message);
             writer.Close();
         }
 
