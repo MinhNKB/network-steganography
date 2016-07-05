@@ -87,24 +87,26 @@ namespace ReceiverTCP
 
                 if (receivedPacket[1] == 0)
                 {
-                    writeLineLogMessage("Received 00000000");
+                    lastReceived = receiveTime;
+                    //writeLineLogMessage("Received 00000000");
                     sendResponse(true);
                     //adjustACKDelay();
                     ++numberOfACKs;
-                    writeLineLogMessage("Number of ACKs: " + numberOfACKs);
-                    Console.WriteLine("Thread {0} number of ACKs: {1}", threadIndex, numberOfACKs);
+                    //writeLineLogMessage("Number of ACKs: " + numberOfACKs);
+                    //Console.WriteLine("Thread {0} number of ACKs: {1}", threadIndex, numberOfACKs);
                     binaryData += "00000000";
                     return;
                 }
 
                 if (receivedPacket[1] == 1)
                 {
-                    writeLineLogMessage("Received finish signal");
+                    lastReceived = receiveTime;
+                    //writeLineLogMessage("Received finish signal");
                     sendResponse(true);
                     //adjustACKDelay();
                     ++numberOfACKs;
-                    writeLineLogMessage("Number of ACKs: " + numberOfACKs);
-                    Console.WriteLine("Thread {0} number of ACKs: {1}", threadIndex, numberOfACKs);
+                    //writeLineLogMessage("Number of ACKs: " + numberOfACKs);
+                    //Console.WriteLine("Thread {0} number of ACKs: {1}", threadIndex, numberOfACKs);
                     return;
                 }
 
@@ -115,41 +117,41 @@ namespace ReceiverTCP
                     return;
                 }
 
-                currentReceived = DateTime.Now;
+                currentReceived = receiveTime;
                 processNewBit();
                 lastReceived = currentReceived;
 
                 if (tmpReceivedByte.Length == 16)
                 {
-                    Console.WriteLine(tmpReceivedByte);
-                    writeLineLogMessage(tmpReceivedByte);
+                    //Console.WriteLine(tmpReceivedByte);
+                    //writeLineLogMessage(tmpReceivedByte);
 
                     string receivedData = tmpReceivedByte.Substring(0, 8);
                     string receivedCrc = tmpReceivedByte.Substring(8, 8);
 
                     if (checkSum(receivedData, receivedCrc) == false || receivedData == "00000000")
                     {
-                        writeLineLogMessage("NACK");
+                        //writeLineLogMessage("NACK");
                         sendResponse(false);
                         //adjustNACKDelay();
                         ++numberOfNACKs;
-                        writeLineLogMessage("Number of NACKs: " + numberOfNACKs);
+                        //writeLineLogMessage("Number of NACKs: " + numberOfNACKs);
                         Console.WriteLine("Thread {0}: number of NACKs: {1}", threadIndex, numberOfNACKs);
                     }
                     else
                     {
-                        writeLineLogMessage("ACK");
+                        //writeLineLogMessage("ACK");
                         sendResponse(true);
                         //adjustACKDelay();
                         ++numberOfACKs;
-                        writeLineLogMessage("Number of ACKs: " + numberOfACKs);
+                        //writeLineLogMessage("Number of ACKs: " + numberOfACKs);
                         Console.WriteLine("Thread {0}: number of ACKs: {1}", threadIndex, numberOfACKs);
 
                         binaryData += receivedData;
 
                         string decodedCharacter = System.Text.Encoding.UTF8.GetString(convertStringBytesToBytes(receivedData));
                         stringData += decodedCharacter;
-                        writeLineLogMessage(stringData);
+                        //writeLineLogMessage(stringData);
                     }
                     tmpReceivedByte = "empty";
                 }
@@ -181,7 +183,6 @@ namespace ReceiverTCP
                 else
                     response[1] = 0;
                 networkStream.Write(response, 0, response.Length);
-                writeLineLogMessage("Response sent!");
             }
             
         }

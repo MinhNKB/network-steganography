@@ -25,7 +25,9 @@ namespace ReceiverTCP
         static NetworkStream networkStream;
         static readonly Object networkStreamLock = new Object();
 
-        static int[] numberOfThreadsArray = new int[20] {10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200};
+        //static int[] numberOfThreadsArray = new int[1] {1};
+        static int[] numberOfThreadsArray;
+        static int[] delayTypes;
 
         static void Main(string[] args)
         {
@@ -39,61 +41,76 @@ namespace ReceiverTCP
             {
                 for (int j = 0; j < numberOfRunTimes; ++j)
                 {
-                    StreamWriter resultWriter = new StreamWriter("Result.txt", true);
-                    resultWriter.WriteLine("---------- Number of threads used: {0}, Index: {1} ----------", numberOfThreadsArray[i], j);
-                        
-                    resultWriter.Close();
-                    try
+                    
+                    for (int k = 0; k < delayTypes.Length; ++k)
                     {
-
-                        initConnection();
-
-                        List<Receiver> receivers = new List<Receiver>();
-                        int numberOfFinishSignals = 0;
-
-                        for (int k = 0; k < numberOfThreadsArray[i]; ++k)
-                        {
-                            Receiver receiver = new Receiver(delay, j, k, networkStream, networkStreamLock);
-                            receivers.Add(receiver);
-                        }
-
-                        while (numberOfFinishSignals < numberOfThreadsArray[i])
-                        {
-                            byte[] receivedPacket = receivePacket();
-                            int index = Convert.ToInt32(receivedPacket[0]);
-                            //Thread thread = new Thread(() => receivers[index].processNewPacket(receivedPacket, DateTime.Now));
-                            //thread.Start();
-                            receivers[index].processNewPacket(receivedPacket, DateTime.Now);
-                            if (receivedPacket[1] == 1)
-                                ++numberOfFinishSignals;
-                        }
-                        //Thread.Sleep(5000);
-                        tcpListener.Stop();
-                        tcpClient.Close();
-                        networkStream.Close();
-                        writeFinishMessage(receivers, j, numberOfThreadsArray[i]);
-                    }
-                    catch (Exception ex)
-                    {
+                        delay = delayTypes[k];
+                        StreamWriter resultWriter = new StreamWriter("Result.txt", true);
+                        resultWriter.WriteLine("---------- Number of threads used: {0}, Index: {1} ----------", numberOfThreadsArray[i], j);
+                        resultWriter.WriteLine("delay");
+                        resultWriter.Close();
                         try
                         {
-                            --j;
-                            Console.WriteLine("Main: {0}", ex.ToString());
-                            writeLineLogMessage(ex.ToString());
+
+                            initConnection();
+
+                            List<Receiver> receivers = new List<Receiver>();
+                            int numberOfFinishSignals = 0;
+
+                            for (int l = 0; l < numberOfThreadsArray[i]; ++l)
+                            {
+                                Receiver receiver = new Receiver(delay, j, l, networkStream, networkStreamLock);
+                                receivers.Add(receiver);
+                            }
+
+                            while (numberOfFinishSignals < numberOfThreadsArray[i])
+                            {
+                                byte[] receivedPacket = receivePacket();
+                                int index = Convert.ToInt32(receivedPacket[0]);
+                                //Thread thread = new Thread(() => receivers[index].processNewPacket(receivedPacket, DateTime.Now));
+                                //thread.Start();
+
+                                receivers[0].processNewPacket(receivedPacket, DateTime.Now);
+                                //receivers[index].processNewPacket(receivedPacket, DateTime.Now);
+                                if (receivedPacket[1] == 1)
+                                    ++numberOfFinishSignals;
+                            }
+                            //Thread sleepThread = new Thread(() => sleep(5000));
+                            //sleepThread.Start();
+                            //sleepThread.Join();
+
                             tcpListener.Stop();
                             tcpClient.Close();
                             networkStream.Close();
+                            writeFinishMessage(receivers, j, numberOfThreadsArray[i]);
                         }
-                        catch (Exception) { }
-                        //throw new Exception("Port " + port + ": " + ex.ToString());
+                        catch (Exception ex)
+                        {
+                            try
+                            {
+                                k--;
+                                Console.WriteLine("Main: {0}", ex.ToString());
+                                writeLineLogMessage(ex.ToString());
+                                tcpListener.Stop();
+                                tcpClient.Close();
+                                networkStream.Close();
+                            }
+                            catch (Exception) { }
+                            //throw new Exception("Port " + port + ": " + ex.ToString());
+                        }
                     }
                 }
             }
         }
 
+        private static void sleep(int millisecond)
+        {
+            Thread.Sleep(millisecond);
+        }
+
         private static byte[] receivePacket()
         {
-            lock (networkStreamLock)
+            //lock (networkStreamLock)
             {
                 byte[] tcpPacket = new byte[2];
                 networkStream.Read(tcpPacket, 0, tcpPacket.Length);
@@ -245,8 +262,9 @@ namespace ReceiverTCP
             numberOfRunTimes = 50;
             startIndex = 0;
             compressAlgorithm = -1;
+            numberOfThreadsArray = new int[1] { 1 };
+            delayTypes = new int[5] { 80, 90, 100, 110, 120 };
             //reader.Close();
         }
-
     }
 }
