@@ -23,7 +23,7 @@ namespace ReceiverTCP
 
         static Exception ex = null;
 
-        static int[] numberOfPortsArray = new int[3] { 100, 150, 200 };
+        static int[] numberOfPortsArray;
 
         static int currentNumberOfPortsIndex = 0;
 
@@ -207,14 +207,16 @@ namespace ReceiverTCP
 
         private static void inputHostInfo()
         {
-            StreamReader reader = new StreamReader("HostInfo.txt");
-            ip = reader.ReadLine();
-            startPort = Int32.Parse(reader.ReadLine());
-            numberOfRunTimes = Int32.Parse(reader.ReadLine());
-            startIndex = Int32.Parse(reader.ReadLine());
-            numberOfThreads = Int32.Parse(reader.ReadLine());
-            compressAlgorithm = Int32.Parse(reader.ReadLine());
-            reader.Close();
+            //StreamReader reader = new StreamReader("HostInfo.txt");
+            ip = "192.168.1.200";
+            startPort = 4040;
+            numberOfRunTimes = 50;
+            startIndex = 0;
+            //numberOfThreads = Int32.Parse(reader.ReadLine());
+            compressAlgorithm = -1;
+            numberOfPortsArray = new int[20] { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200};
+
+            //reader.Close();
         }
 
     }
