@@ -93,11 +93,11 @@ namespace ReceiverTCP
                         //if (tcpPacket[0] == 0 && isCompressed == true)
                         if (tcpPacket[0] == 0)
                         {
-                            writeLineLogMessage("Received 00000000");
+                            //writeLineLogMessage("Received 00000000");
                             sendResponse(true);
                             //adjustACKDelay();
                             ++numberOfACKs;
-                            writeLineLogMessage("Number of ACKs: " + numberOfACKs);
+                            //writeLineLogMessage("Number of ACKs: " + numberOfACKs);
                             Console.WriteLine("Port {0} number of ACKs: {1}", port, numberOfACKs);
                             binaryData += "00000000";
                             continue;
@@ -105,11 +105,11 @@ namespace ReceiverTCP
                         //else if (tcpPacket[0] == 1 && isCompressed == true)
                         else if (tcpPacket[0] == 1)
                         {
-                            writeLineLogMessage("Received finish signal");
+                            //writeLineLogMessage("Received finish signal");
                             sendResponse(true);
                             //adjustACKDelay();
                             ++numberOfACKs;
-                            writeLineLogMessage("Number of ACKs: " + numberOfACKs);
+                            //writeLineLogMessage("Number of ACKs: " + numberOfACKs);
                             Console.WriteLine("Port {0} number of ACKs: {1}", port, numberOfACKs);
                             tcpListener.Stop();
                             tcpClient.Close();
@@ -119,7 +119,7 @@ namespace ReceiverTCP
                         }
                         else
                         {
-                            writeLineLogMessage("Received first empty signal");
+                            //writeLineLogMessage("Received first empty signal");
                             break;
                         }
                     }
@@ -134,7 +134,7 @@ namespace ReceiverTCP
                         if (tmpReceivedByte.Length == 16)
                         {
                             Console.WriteLine(tmpReceivedByte);
-                            writeLineLogMessage(tmpReceivedByte);
+                            //writeLineLogMessage(tmpReceivedByte);
 
                             string receivedData = tmpReceivedByte.Substring(0, 8);
                             string receivedCrc = tmpReceivedByte.Substring(8, 8);
@@ -144,7 +144,7 @@ namespace ReceiverTCP
                                 sendResponse(false);
                                 //adjustNACKDelay();
                                 ++numberOfNACKs;
-                                writeLineLogMessage("Number of NACKs: " + numberOfNACKs);
+                                //writeLineLogMessage("Number of NACKs: " + numberOfNACKs);
                                 Console.WriteLine("Port {0} number of NACKs: {1}", port, numberOfNACKs);
                             }
                             else
@@ -152,7 +152,7 @@ namespace ReceiverTCP
                                 sendResponse(true);
                                 //adjustACKDelay();
                                 ++numberOfACKs;
-                                writeLineLogMessage("Number of ACKs: " + numberOfACKs);
+                                //writeLineLogMessage("Number of ACKs: " + numberOfACKs);
                                 Console.WriteLine("Port {0} number of ACKs: {1}", port, numberOfACKs);
 
                                 //if (receivedData == "00000011" && isCompressed == false)
@@ -182,11 +182,11 @@ namespace ReceiverTCP
                                 //if (tcpPacket[0] == 0 && isCompressed == true)
                                 if (tcpPacket[0] == 0)
                                 {
-                                    writeLineLogMessage("Received 00000000");
+                                    //writeLineLogMessage("Received 00000000");
                                     sendResponse(true);
                                     //adjustACKDelay();
                                     ++numberOfACKs;
-                                    writeLineLogMessage("Number of ACKs: " + numberOfACKs);
+                                    //writeLineLogMessage("Number of ACKs: " + numberOfACKs);
                                     Console.WriteLine("Port {0} number of ACKs: {1}", port, numberOfACKs);
                                     binaryData += "00000000";
                                     continue;
@@ -194,11 +194,11 @@ namespace ReceiverTCP
                                 //else if (tcpPacket[0] == 1 && isCompressed == true)
                                 else if (tcpPacket[0] == 1)
                                 {
-                                    writeLineLogMessage("Received finish signal");
+                                    //writeLineLogMessage("Received finish signal");
                                     sendResponse(true);
                                     //adjustACKDelay();
                                     ++numberOfACKs;
-                                    writeLineLogMessage("Number of ACKs: " + numberOfACKs);
+                                    //writeLineLogMessage("Number of ACKs: " + numberOfACKs);
                                     Console.WriteLine("Port {0} number of ACKs: {1}", port, numberOfACKs);
                                     tcpListener.Stop();
                                     tcpClient.Close();
@@ -208,7 +208,7 @@ namespace ReceiverTCP
                                 }
                                 else
                                 {
-                                    writeLineLogMessage("Received first empty signal");
+                                    //writeLineLogMessage("Received first empty signal");
                                     break;
                                 }
                             }
@@ -279,11 +279,11 @@ namespace ReceiverTCP
             tcpListener.Start();
 
             Console.WriteLine("Waiting for sender on port {0}...", port);
-            writeLineLogMessage("Waiting for sender...");
+            //writeLineLogMessage("Waiting for sender...");
             tcpClient = tcpListener.AcceptTcpClient();
 
             Console.WriteLine("Port {0} connected!", port);
-            writeLineLogMessage("Connected!");
+            //writeLineLogMessage("Connected!");
             networkStream = tcpClient.GetStream();
         }
 
@@ -303,7 +303,7 @@ namespace ReceiverTCP
         private void receiveSignal()
         {
             tcpPacket = new byte[1];
-            networkStream.ReadTimeout = 20000;
+            //networkStream.ReadTimeout = 20000;
             networkStream.Read(tcpPacket, 0, 1);
         }
 

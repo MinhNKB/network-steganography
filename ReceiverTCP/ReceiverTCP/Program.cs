@@ -214,7 +214,7 @@ namespace ReceiverTCP
             startIndex = 0;
             //numberOfThreads = Int32.Parse(reader.ReadLine());
             compressAlgorithm = -1;
-            numberOfPortsArray = new int[20] { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200};
+            numberOfPortsArray = new int[7] { 140, 150, 160, 170, 180, 190, 200};
 
             //reader.Close();
         }
