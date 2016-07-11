@@ -35,13 +35,13 @@ namespace ReceiverTCP
             stringOriginalData = originalDataReader.ReadToEnd();
             originalDataReader.Close();
 
-            for (currentNumberOfPortsIndex = 0; currentNumberOfPortsIndex < numberOfPortsArray.Length; ++currentNumberOfPortsIndex)
+            //int count = startIndex;
+            for (int count = startIndex; count < numberOfRunTimes; ++count)
             {
-                numberOfThreads = numberOfPortsArray[currentNumberOfPortsIndex];
-
-                int count = startIndex;
-                while (count < numberOfRunTimes)
+                for (currentNumberOfPortsIndex = 0; currentNumberOfPortsIndex < numberOfPortsArray.Length; ++currentNumberOfPortsIndex)
                 {
+                    numberOfThreads = numberOfPortsArray[currentNumberOfPortsIndex];
+
                     StreamWriter resultWriter = new StreamWriter("Result.txt", true);
                     resultWriter.WriteLine("---------- Number of ports used: {0}, Index: {1} ----------", numberOfThreads, count);
                     resultWriter.Close();
@@ -79,9 +79,9 @@ namespace ReceiverTCP
                             --i;
                         }
                     }
-                    ++count;
                 }
             }
+                    
                 
         }
 
@@ -214,7 +214,7 @@ namespace ReceiverTCP
             startIndex = 0;
             //numberOfThreads = Int32.Parse(reader.ReadLine());
             compressAlgorithm = -1;
-            numberOfPortsArray = new int[7] { 140, 150, 160, 170, 180, 190, 200};
+            numberOfPortsArray = new int[13] { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130};
 
             //reader.Close();
         }
