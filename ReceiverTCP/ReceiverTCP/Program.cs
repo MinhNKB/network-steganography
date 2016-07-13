@@ -38,9 +38,9 @@ namespace ReceiverTCP
             stringOriginalData = originalDataReader.ReadToEnd();
             originalDataReader.Close();
 
-            for (int i = 0; i < numberOfThreadsArray.Length; ++i)
+            for (int j = 0; j < numberOfRunTimes; ++j)
             {
-                for (int j = 0; j < numberOfRunTimes; ++j)
+                for (int i = 0; i < numberOfThreadsArray.Length; ++i)
                 {
                     
                     for (int k = 0; k < delayTypes.Length; ++k)
@@ -48,7 +48,6 @@ namespace ReceiverTCP
                         delay = delayTypes[k];
                         StreamWriter resultWriter = new StreamWriter("Result.txt", true);
                         resultWriter.WriteLine("---------- Number of threads used: {0}, Index: {1} ----------", numberOfThreadsArray[i], j);
-                        resultWriter.WriteLine("delay");
                         resultWriter.Close();
                         try
                         {
@@ -71,8 +70,8 @@ namespace ReceiverTCP
                                 //Thread thread = new Thread(() => receivers[index].processNewPacket(receivedPacket, DateTime.Now));
                                 //thread.Start();
 
-                                receivers[0].processNewPacket(receivedPacket, DateTime.Now);
-                                //receivers[index].processNewPacket(receivedPacket, DateTime.Now);
+                                //receivers[0].processNewPacket(receivedPacket, DateTime.Now);
+                                receivers[index].processNewPacket(receivedPacket, DateTime.Now);
                                 if (receivedPacket[1] == 1)
                                     ++numberOfFinishSignals;
                             }
@@ -329,8 +328,8 @@ namespace ReceiverTCP
             delay = 100;
             numberOfRunTimes = 50;
             startIndex = 0;
-            compressionAlgorithm = CompressionAlgorithms.bzip2;
-            numberOfThreadsArray = new int[1] { 1 };
+            compressionAlgorithm = CompressionAlgorithms.none;
+            numberOfThreadsArray = new int[20] { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200};
             delayTypes = new int[1] { 100 };
             //reader.Close();
         }
