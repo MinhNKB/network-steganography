@@ -26,6 +26,7 @@ namespace ReceiverTCP
         static int[] numberOfPortsArray;
 
         static int currentNumberOfPortsIndex = 0;
+        private static int[] delayTypes;
 
         static void Main(string[] args)
         {
@@ -45,38 +46,41 @@ namespace ReceiverTCP
                     StreamWriter resultWriter = new StreamWriter("Result.txt", true);
                     resultWriter.WriteLine("---------- Number of ports used: {0}, Index: {1} ----------", numberOfThreads, count);
                     resultWriter.Close();
-                    delay = 450;
-                    for (int i = 0; i < 1; ++i)
+                    for (int k = 0; k < delayTypes.Length; ++k)
                     {
-                        List<Receiver> receivers = new List<Receiver>();
-                        List<Thread> threads = new List<Thread>();
-                        try
+                        delay = delayTypes[k];
+                        for (int i = 0; i < 1; ++i)
                         {
-
-                            for (int j = 0; j < numberOfThreads; ++j)
+                            List<Receiver> receivers = new List<Receiver>();
+                            List<Thread> threads = new List<Thread>();
+                            try
                             {
-                                Receiver receiver = new Receiver(ip, (startPort + j), delay, count, compressAlgorithm != -1);
-                                Thread thread = new Thread(receiver.run);
-                                thread.Start();
-                                receivers.Add(receiver);
-                                threads.Add(thread);
-                            }
 
-                            for (int j = 0; j < threads.Count; ++j)
+                                for (int j = 0; j < numberOfThreads; ++j)
+                                {
+                                    Receiver receiver = new Receiver(ip, (startPort + j), delay, count, compressAlgorithm != -1);
+                                    Thread thread = new Thread(receiver.run);
+                                    thread.Start();
+                                    receivers.Add(receiver);
+                                    threads.Add(thread);
+                                }
+
+                                for (int j = 0; j < threads.Count; ++j)
+                                {
+                                    threads[j].Join();
+                                }
+
+
+                                writeFinishMessage(receivers, count);
+                                delay -= 50;
+                            }
+                            catch (Exception ex)
                             {
-                                threads[j].Join();
+                                writeLineLogMessage(ex.ToString());
+                                for (int j = 0; j < threads.Count; ++j)
+                                    threads[j].Abort();
+                                --i;
                             }
-
-
-                            writeFinishMessage(receivers, count);
-                            delay -= 50;
-                        }
-                        catch (Exception ex)
-                        {
-                            writeLineLogMessage(ex.ToString());
-                            for (int j = 0; j < threads.Count; ++j)
-                                threads[j].Abort();
-                            --i;
                         }
                     }
                 }
@@ -208,14 +212,26 @@ namespace ReceiverTCP
         private static void inputHostInfo()
         {
             StreamReader reader = new StreamReader("HostInfo.txt");
-            ip = "192.168.1.200";
-            startPort = Int32.Parse(reader.ReadLine());
-            numberOfRunTimes = 50;
+            ip = reader.ReadLine().Remove(0, 4);
+            startPort = Int32.Parse(reader.ReadLine().Remove(0, 15));
+            numberOfRunTimes = Int32.Parse(reader.ReadLine().Remove(0, 21));
             startIndex = 0;
-            //numberOfThreads = Int32.Parse(reader.ReadLine());
-            compressAlgorithm = -1;
-            //numberOfPortsArray = new int[18] { 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200};
-            numberOfPortsArray = new int[1] { 1 };
+            if (reader.ReadLine().Remove(0, 24) == "false")
+                compressAlgorithm = -1;
+            else
+                compressAlgorithm = 1;
+
+            string[] tmp = reader.ReadLine().Remove(0, 23).Split(' ');
+            numberOfPortsArray = new int[tmp.Length];
+            for (int i = 0; i < tmp.Length; ++i)
+                numberOfPortsArray[i] = Int32.Parse(tmp[i]);
+
+
+            tmp = reader.ReadLine().Remove(0, 23).Split(' ');
+            delayTypes = new int[tmp.Length];
+            for (int i = 0; i < tmp.Length; ++i)
+                delayTypes[i] = Int32.Parse(tmp[i]);
+
             reader.Close();
         }
     }
