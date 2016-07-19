@@ -45,7 +45,7 @@ namespace ReceiverTCP
                     StreamWriter resultWriter = new StreamWriter("Result.txt", true);
                     resultWriter.WriteLine("---------- Number of ports used: {0}, Index: {1} ----------", numberOfThreads, count);
                     resultWriter.Close();
-                    delay = 100;
+                    delay = 450;
                     for (int i = 0; i < 1; ++i)
                     {
                         List<Receiver> receivers = new List<Receiver>();
@@ -69,7 +69,7 @@ namespace ReceiverTCP
 
 
                             writeFinishMessage(receivers, count);
-                            delay += 100;
+                            delay -= 50;
                         }
                         catch (Exception ex)
                         {
@@ -207,17 +207,16 @@ namespace ReceiverTCP
 
         private static void inputHostInfo()
         {
-            //StreamReader reader = new StreamReader("HostInfo.txt");
+            StreamReader reader = new StreamReader("HostInfo.txt");
             ip = "192.168.1.200";
-            startPort = 4040;
+            startPort = Int32.Parse(reader.ReadLine());
             numberOfRunTimes = 50;
             startIndex = 0;
             //numberOfThreads = Int32.Parse(reader.ReadLine());
             compressAlgorithm = -1;
-            numberOfPortsArray = new int[13] { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130};
-
-            //reader.Close();
+            //numberOfPortsArray = new int[18] { 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200};
+            numberOfPortsArray = new int[1] { 1 };
+            reader.Close();
         }
-
     }
 }
