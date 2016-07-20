@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
@@ -24,6 +25,7 @@ namespace SenderTCP
         static int numberOfThreads;
         static bool useOnePort;
         static bool useZip;
+        static string fileName;
 
         static string content;    
         static int countACK, countNACK;                                      
@@ -32,31 +34,32 @@ namespace SenderTCP
         static TcpClient[] tcpClients;
         static NetworkStream[] networkStreams;
         static List<Thread> threads;
-        static byte[] checkAck;
+        static byte[] checkAck;                      
         static void Main(string[] args)
-        {        
-            Log.WriteLine("Loged");
+        {           
             inputReceiverInfo();
+            for (int i = 0; i < timesToRun; ++i)
+            {                
+                for (int k = 0; k < arrayOfNumbersOfThreads.Length; k++)
+                {
+                    Log.WriteLine("------------" + arrayOfNumbersOfThreads[k] + " port------------");                   
 
-            for (int k = 0; k < arrayOfNumbersOfThreads.Length; k++)
-            {
-                numberOfThreads = arrayOfNumbersOfThreads[k];
-                checkAck = new byte[numberOfThreads];
-                binaryContents = new string[numberOfThreads];
-                if (!useOnePort)
-                {
-                    tcpClients = new TcpClient[numberOfThreads];
-                    networkStreams = new NetworkStream[numberOfThreads];
-                }
-                else
-                {
-                    tcpClients = new TcpClient[1];
-                    networkStreams = new NetworkStream[1];
-                }
-                
-                prepareBinaryData();
-                for (int i = 0; i < timesToRun; ++i)
-                {
+                    numberOfThreads = arrayOfNumbersOfThreads[k];
+                    checkAck = new byte[numberOfThreads];
+                    binaryContents = new string[numberOfThreads];
+                    if (!useOnePort)
+                    {
+                        tcpClients = new TcpClient[numberOfThreads];
+                        networkStreams = new NetworkStream[numberOfThreads];
+                    }
+                    else
+                    {
+                        tcpClients = new TcpClient[1];
+                        networkStreams = new NetworkStream[1];
+                    }
+
+                    prepareBinaryData();
+
                     try
                     {
                         delay = listOfDelays[i % listOfDelays.Length];
@@ -66,33 +69,33 @@ namespace SenderTCP
                         Console.WriteLine("------------The " + i + "th run------------");
                         Console.WriteLine("Run with delay: " + delay.ToString());
                         for (int j = 0; j < numberOfThreads; j++)
-                        {                            
+                        {
                             Thread thread = new Thread(new ParameterizedThreadStart(Program.run));
                             threads.Add(thread);
                             if (!useOnePort)
                             {
-                                connectToReceiver(j);                                
+                                connectToReceiver(j);
                             }
                             else
                             {
-                                if(j==0)
-                                    connectToReceiver(0);                                
+                                if (j == 0)
+                                    connectToReceiver(0);
                             }
                             thread.Start(j);
                         }
                         foreach (Thread thread in threads)
-                            thread.Join();                                                         
+                            thread.Join();                        
                     }
                     catch (Exception ex)
                     {
                         Console.WriteLine("Exception: " + ex.Message);
-                        foreach (Thread thread in threads)                            
+                        foreach (Thread thread in threads)
                             thread.Abort();
                         i--;
                         Thread.Sleep(5000);
                     }
                     finally
-                    {                        
+                    {                       
                         threads.Clear();
                         foreach (TcpClient tcpClient in tcpClients)
                             tcpClient.Close();
@@ -100,9 +103,11 @@ namespace SenderTCP
                             networkStream.Close();
                         Thread.Sleep(5000);
                     }
-                }               
-            }
+
+                }
+            }           
             Log.Close();
+            Console.WriteLine("ALL FINISHED!!!!!!");
             Console.ReadKey();
         }
        
@@ -115,7 +120,7 @@ namespace SenderTCP
             bool checkNew = true;           
 
             while (i <= binaryContents[index].Length)
-            {
+            {               
                 Console.WriteLine(index + " current: " + i);
                 checkAck[index] = 2; //reset
                 if (i == binaryContents[index].Length)
@@ -149,7 +154,7 @@ namespace SenderTCP
                         for (int j = 0; j < temp.Length; j++)
                         {
                             if (temp[j] == '1')
-                            {
+                            {                                
                                 Thread.Sleep(delay);
                                 sendAPacket(index, 2);
                             }
@@ -161,11 +166,11 @@ namespace SenderTCP
                 //Console.WriteLine(index + "Waiting for signal");
                 bool check = CheckForAck(index);                
                 if (check)
-                {
+                {                   
                     i += 8;
                     checkNew = true;
                     countACK++;
-                    Console.WriteLine("ACK " + index + " : " + countACK);
+                    Console.WriteLine("ACK " + index + " : " + countACK);                    
                 }
                 else
                 {
@@ -213,15 +218,21 @@ namespace SenderTCP
 
         private static void prepareBinaryData()
         {
-            StreamReader fileReader = new StreamReader("Data1.txt");
-            content = fileReader.ReadToEnd();
+            StreamReader fileReader = null;
+            byte[] byteData;
+            if (!useZip)
+            {
+                fileReader = new StreamReader(fileName);
+                content = fileReader.ReadToEnd();
 
-            byte[] byteData = Encoding.ASCII.GetBytes(content);
-            if(useZip)
-                byteData = CompressUsingGzip(byteData);
+                byteData = Encoding.ASCII.GetBytes(content);
+            }
+            else
+            {
+                byteData = CompressUsingBZIP2(fileName);
+            }
             List<byte> listOfData = new List<byte>(byteData);          
-
-            //int sizeOfAChunk = (int)Math.Ceiling((double)byteData.Length / numberOfThreads);
+            
             int mimimumSizeOfAChunk = byteData.Length / numberOfThreads;
             int countChunkHaveMoreData = byteData.Length % numberOfThreads;
             int actualSize;
@@ -253,7 +264,8 @@ namespace SenderTCP
                     binaryContents[i] = "";
             }                                                                  
                 
-            fileReader.Close();
+            if(!useZip)
+                fileReader.Close();
         }
 
         private static string ConvertStringToBinaryString(string iContent)
@@ -267,6 +279,8 @@ namespace SenderTCP
         {
             StreamReader reader = new StreamReader("ReceiverInfo.txt");
             string line;
+            line = reader.ReadLine();
+            fileName = line.Remove(0, line.IndexOf(' ') + 1);
             line = reader.ReadLine();
             IP = line.Remove(0, line.IndexOf(' ') + 1);
             line = reader.ReadLine();
@@ -299,17 +313,23 @@ namespace SenderTCP
         }
         
         static void sendAPacket(int index, byte data)
-        {            
+        {
+            Stopwatch watch = new Stopwatch();
+            watch.Start();
             if (!useOnePort)
             {
                 byte[] packet = new byte[1] { data };
+             
                 networkStreams[index].Write(packet, 0, packet.Length);
+                
             }
             else
             {
                 byte[] packet = new byte[2] { (byte)index, data };
                 networkStreams[0].Write(packet, 0, packet.Length);
             }
+            watch.Stop();
+            double k = watch.ElapsedTicks / TimeSpan.TicksPerMillisecond;
         }
         
         static void sendPacket(int index,Object obj)
@@ -338,19 +358,25 @@ namespace SenderTCP
         public static String ToBinary(Byte[] data)
         {
             return string.Join(" ", data.Select(byt => Convert.ToString(byt, 2).PadLeft(8, '0')).ToArray());
-        }
-
-        public static byte[] CompressUsingGzip(byte[] raw)
+        }        
+       
+        private static byte[] CompressUsingBZIP2(string fileName)
         {
-            using (MemoryStream memory = new MemoryStream())
-            {
-                using (GZipStream gzip = new GZipStream(memory,
-                CompressionLevel.Optimal, true))
-                {
-                    gzip.Write(raw, 0, raw.Length);
-                }
-                return memory.ToArray();
-            }
-        }
+            string compressedFileName = "tmp" + DateTime.Now.Millisecond + ".bz2";
+            ProcessStartInfo p = new ProcessStartInfo();
+            p.FileName = @"C:\Program Files\7-Zip\7z.exe";
+
+            p.Arguments = "a -tbzip2 \"" + compressedFileName + "\" \"" + fileName + "\" -mx=9";
+
+            p.WindowStyle = ProcessWindowStyle.Hidden;
+
+            Process x = Process.Start(p);
+            x.WaitForExit();
+
+            byte[] result = File.ReadAllBytes(compressedFileName);
+            File.Delete(compressedFileName);
+
+            return result;
+        }        
     }
 }
