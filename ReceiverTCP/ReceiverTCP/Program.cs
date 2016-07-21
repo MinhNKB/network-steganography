@@ -72,7 +72,6 @@ namespace ReceiverTCP
 
 
                                 writeFinishMessage(receivers, count);
-                                delay -= 50;
                             }
                             catch (Exception ex)
                             {
@@ -213,21 +212,21 @@ namespace ReceiverTCP
         {
             StreamReader reader = new StreamReader("HostInfo.txt");
             ip = reader.ReadLine().Remove(0, 4);
-            startPort = Int32.Parse(reader.ReadLine().Remove(0, 15));
+            startPort = Int32.Parse(reader.ReadLine().Remove(0, 12));
             numberOfRunTimes = Int32.Parse(reader.ReadLine().Remove(0, 21));
             startIndex = 0;
-            if (reader.ReadLine().Remove(0, 24) == "false")
+            if (reader.ReadLine().Remove(0, 13) == "false")
                 compressAlgorithm = -1;
             else
-                compressAlgorithm = 1;
+                compressAlgorithm = 0;
 
-            string[] tmp = reader.ReadLine().Remove(0, 23).Split(' ');
+            string[] tmp = reader.ReadLine().Remove(0, 19).Split(' ');
             numberOfPortsArray = new int[tmp.Length];
             for (int i = 0; i < tmp.Length; ++i)
                 numberOfPortsArray[i] = Int32.Parse(tmp[i]);
 
 
-            tmp = reader.ReadLine().Remove(0, 23).Split(' ');
+            tmp = reader.ReadLine().Remove(0, 7).Split(' ');
             delayTypes = new int[tmp.Length];
             for (int i = 0; i < tmp.Length; ++i)
                 delayTypes[i] = Int32.Parse(tmp[i]);
