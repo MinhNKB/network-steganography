@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
@@ -17,7 +18,7 @@ namespace ReceiverTCP
         static int numberOfRunTimes;
         static int startIndex;
         static int numberOfThreads;
-        static int compressAlgorithm;
+        static CompressionAlgorithms compressionAlgorithm;
 
         static string stringOriginalData;
 
@@ -58,7 +59,7 @@ namespace ReceiverTCP
 
                                 for (int j = 0; j < numberOfThreads; ++j)
                                 {
-                                    Receiver receiver = new Receiver(ip, (startPort + j), delay, count, compressAlgorithm != -1);
+                                    Receiver receiver = new Receiver(ip, (startPort + j), delay, count, compressionAlgorithm != CompressionAlgorithms.none);
                                     Thread thread = new Thread(receiver.run);
                                     thread.Start();
                                     receivers.Add(receiver);
@@ -88,13 +89,81 @@ namespace ReceiverTCP
                 
         }
 
-        private static string decompressData(string compressedBinaryData)
+        enum CompressionAlgorithms
         {
-            byte[] data = Receiver.convertStringBytesToBytes(compressedBinaryData);
-            return System.Text.Encoding.UTF8.GetString(decompress(data));
+            none = -1,
+            gzip = 0,
+            sevenz = 1,
+            bzip2 = 2,
+            xz = 3,
+            zip = 4,
         }
 
-        private static byte[] decompress(byte[] gzip)
+        private static string decompressData(string compressedBinaryData, CompressionAlgorithms compressionAlgorithm)
+        {
+            if (compressionAlgorithm == CompressionAlgorithms.none)
+                return "";
+            byte[] data = Receiver.convertStringBytesToBytes(compressedBinaryData);
+            if (compressionAlgorithm == CompressionAlgorithms.gzip)
+                return System.Text.Encoding.UTF8.GetString(decompressUsingGzip(data));
+            else
+            {
+                string compressedFileName = "tmp" + DateTime.Now.Millisecond;
+                ByteArrayToFile(compressedFileName, data);
+                string decompressedFileName = decompressUsing7z(compressedFileName);
+                string stringData = File.ReadAllText(decompressedFileName);
+                File.Delete(compressedFileName);
+                File.Delete(decompressedFileName);
+                return stringData;
+            }
+                
+        }
+
+        private static string decompressUsing7z(string compressedFileName)
+        {
+            string decompressedFileName = compressedFileName + "~";
+            ProcessStartInfo p = new ProcessStartInfo();
+            p.FileName = @"C:\Program Files\7-Zip\7z.exe";
+
+            p.Arguments = "e \"" + compressedFileName + "\"";
+
+            p.WindowStyle = ProcessWindowStyle.Hidden;
+
+            Process x = Process.Start(p);
+            x.WaitForExit();
+
+            return decompressedFileName;
+        }
+
+        public static bool ByteArrayToFile(string _FileName, byte[] _ByteArray)
+        {
+            try
+            {
+                // Open file for reading
+                System.IO.FileStream _FileStream =
+                   new System.IO.FileStream(_FileName, System.IO.FileMode.Create,
+                                            System.IO.FileAccess.Write);
+                // Writes a block of bytes to this stream using data from
+                // a byte array.
+                _FileStream.Write(_ByteArray, 0, _ByteArray.Length);
+
+                // close file stream
+                _FileStream.Close();
+
+                return true;
+            }
+            catch (Exception _Exception)
+            {
+                // Error
+                throw _Exception;
+            }
+
+            // error occured, return false
+            return false;
+        }
+
+
+        private static byte[] decompressUsingGzip(byte[] gzip)
         {
             // Create a GZIP stream with decompression mode.
             // ... Then create a buffer and write into while reading from the GZIP stream.
@@ -140,10 +209,10 @@ namespace ReceiverTCP
             binaryWriter.Close();
 
             string stringData = "";
-            if (compressAlgorithm == -1)
+            if (compressionAlgorithm == CompressionAlgorithms.none)
                 stringData = getStringData(receivers);
-            else if (compressAlgorithm == 0)
-                stringData = decompressData(binaryData);
+            else if (compressionAlgorithm == 0)
+                stringData = decompressData(binaryData, compressionAlgorithm);
 
             stringWriter.Write(stringData);
             stringWriter.Close();
@@ -216,9 +285,9 @@ namespace ReceiverTCP
             numberOfRunTimes = Int32.Parse(reader.ReadLine().Remove(0, 21));
             startIndex = 0;
             if (reader.ReadLine().Remove(0, 13) == "false")
-                compressAlgorithm = -1;
+                compressionAlgorithm = CompressionAlgorithms.none;
             else
-                compressAlgorithm = 0;
+                compressionAlgorithm = CompressionAlgorithms.bzip2;
 
             string[] tmp = reader.ReadLine().Remove(0, 19).Split(' ');
             numberOfPortsArray = new int[tmp.Length];
