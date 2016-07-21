@@ -322,16 +322,28 @@ namespace ReceiverTCP
 
         private static void inputHostInfo()
         {
-            //StreamReader reader = new StreamReader("HostInfo.txt");
-            ip = "192.168.1.200";
-            port = 4040;
+            StreamReader reader = new StreamReader("HostInfo.txt");
+            ip = reader.ReadLine().Remove(0, 4);
+            port = Int32.Parse(reader.ReadLine().Remove(0, 12));
             delay = 100;
-            numberOfRunTimes = 50;
+            numberOfRunTimes = Int32.Parse(reader.ReadLine().Remove(0, 21));
             startIndex = 0;
-            compressionAlgorithm = CompressionAlgorithms.none;
-            numberOfThreadsArray = new int[20] { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200};
-            delayTypes = new int[1] { 100 };
-            //reader.Close();
+            if (reader.ReadLine().Remove(0, 13) == "false")
+                compressionAlgorithm = CompressionAlgorithms.none;
+            else
+                compressionAlgorithm = CompressionAlgorithms.bzip2;
+
+            string[] tmp = reader.ReadLine().Remove(0, 19).Split(' ');
+            numberOfThreadsArray = new int[tmp.Length];
+            for (int i = 0; i < tmp.Length; ++i)
+                numberOfThreadsArray[i] = Int32.Parse(tmp[i]);
+
+            tmp = reader.ReadLine().Remove(0, 7).Split(' ');
+            delayTypes = new int[tmp.Length];
+            for (int i = 0; i < tmp.Length; ++i)
+                delayTypes[i] = Int32.Parse(tmp[i]);
+
+            reader.Close();
         }
     }
 }
