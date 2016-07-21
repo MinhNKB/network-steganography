@@ -277,7 +277,7 @@ namespace SenderTCP
 
         private static void inputReceiverInfo()
         {
-            StreamReader reader = new StreamReader("ReceiverInfo.txt");
+            StreamReader reader = new StreamReader("Config.txt");
             string line;
             line = reader.ReadLine();
             fileName = line.Remove(0, line.IndexOf(' ') + 1);
